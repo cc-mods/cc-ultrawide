@@ -61,6 +61,14 @@
  *        so the whole scene lands in the middle with symmetric letterbox bars.
  *        The menu buttons / DLC / Changelog are separate GUIs and are untouched.
  *
+ *   A SECOND VIDEO OPTION — "Ultrawide Width Shrink" (ARRAY_SLIDER 0..100) — is
+ *   also added. It shrinks the internal render WIDTH only (height untouched) for
+ *   displays with a notch / bezel (e.g. AirPlay to an iPhone with a camera
+ *   island). UI anchored to ig.system.width automatically follows the new width
+ *   inward. The actual shrink is applied by postload.js (it must run before
+ *   ig.main); this file mirrors the persisted value to a dedicated localStorage
+ *   key on every change so postload can read it before sc.options exists.
+ *
  *   Everything is wrapped in try/catch and gated behind a "wider/taller than
  *   native" check (and, for the layout modes, the option), so any failure falls
  *   back to vanilla behaviour rather than breaking the game.
@@ -359,12 +367,23 @@
 		return true;
 	}
 
-	// --- Native Options > Video entry --------------------------------------
-	// Adds an "Ultrawide UI" BUTTON_GROUP (Off / Centered / Stretched) to the
-	// native VIDEO options category and supplies its localization by wrapping
-	// ig.Lang#get. sc.OPTIONS_DEFINITION is iterated when sc.options is created
-	// (after prestart), so injecting here means the default is seeded and the
-	// value persists like any other native option.
+	// --- Native Options > Video entries ------------------------------------
+	// Adds two native options in the VIDEO category and supplies their
+	// localization by wrapping ig.Lang#get. sc.OPTIONS_DEFINITION is iterated
+	// when sc.options is created (after prestart), so injecting here means the
+	// defaults are seeded and the values persist like any other native option.
+	//
+	//   1. "Ultrawide UI" BUTTON_GROUP (Off / Centered / Stretched) — controls
+	//      how menus, HUD and background art lay out on a wide screen.
+	//   2. "Ultrawide Width Shrink" ARRAY_SLIDER 0..100 — shrinks the internal
+	//      render WIDTH (height unchanged), useful for displays with notches /
+	//      bezels (e.g. AirPlay-streamed iPhones with a camera island, or any
+	//      bezel-cropped screen). UI elements that anchor to ig.system.width
+	//      automatically come inward as the width shrinks. The actual shrink
+	//      happens in postload.js (it must run before ig.main); we mirror the
+	//      value to localStorage on every change so postload can read it before
+	//      sc.options exists. TAKES EFFECT ON NEXT GAME LAUNCH.
+	const SHRINK_STORAGE_KEY = 'cc-ultrawide-shrink';
 	const LANG = {
 		'sc.gui.options.ultrawide-ui.name': 'Ultrawide UI',
 		'sc.gui.options.ultrawide-ui.description':
@@ -373,6 +392,14 @@
 			'Centered keeps the original layout centered with side bars. ' +
 			'Stretched scales the UI to fill the whole width.',
 		'sc.gui.options.ultrawide-ui.group': ['Off', 'Centered', 'Stretched'],
+		'sc.gui.options.ultrawide-width-shrink.name': 'Ultrawide Width Shrink',
+		'sc.gui.options.ultrawide-width-shrink.description':
+			'Shrinks the rendered width to add equal letterbox bars on the left ' +
+			'and right (height is unchanged). Useful for displays with a notch / ' +
+			'bezel (e.g. AirPlay to an iPhone with a camera island). 0 = full ' +
+			'ultrawide width; 100 = back to native 16:9 width. UI anchored to the ' +
+			'screen edges follows the new width inward. ' +
+			'TAKES EFFECT ON THE NEXT GAME LAUNCH.',
 	};
 
 	function patchLang() {
@@ -398,15 +425,80 @@
 				init: DEFAULT_MODE,
 				cat: sc.OPTION_CATEGORY.VIDEO,
 			};
+			sc.OPTIONS_DEFINITION['ultrawide-width-shrink'] = {
+				type: 'ARRAY_SLIDER',
+				data: [0, 100],
+				init: 0,
+				cat: sc.OPTION_CATEGORY.VIDEO,
+				fill: true,
+			};
 			patchLang();
 			ccuw._optInjected = true;
-			console.log(`${TAG} added "Ultrawide UI" option to the Video menu.`);
+			console.log(`${TAG} added "Ultrawide UI" and "Ultrawide Width Shrink" options to the Video menu.`);
 			return true;
 		} catch (err) {
-			console.warn(`${TAG} could not add native option (using default mode):`, err);
+			console.warn(`${TAG} could not add native options (using defaults):`, err);
 			ccuw._optInjected = true; // don't retry forever
 			return true;
 		}
+	}
+
+	// Mirror the persisted "ultrawide-width-shrink" value into a dedicated
+	// localStorage key so postload.js (which runs BEFORE sc.options exists) can
+	// read it on the next launch and adjust IG_WIDTH accordingly. We patch
+	// sc.OptionModel#set to catch live changes, and also seed the key once after
+	// sc.options has loaded its values from storage (covers the first launch
+	// after the option is added and any "Set to default" path).
+	function patchShrinkMirror() {
+		if (ccuw._shrinkMirrorPatched) return true;
+		if (!(window.sc && sc.OptionModel && sc.OptionModel.prototype)) return false;
+
+		const proto = sc.OptionModel.prototype;
+		const origSet = proto.set;
+		proto.set = function (key, value) {
+			const ret = origSet.apply(this, arguments);
+			try {
+				if (key === 'ultrawide-width-shrink') {
+					const n = clampShrink(value);
+					localStorage.setItem(SHRINK_STORAGE_KEY, String(n));
+				}
+			} catch (_) {
+				/* never let storage break the option model */
+			}
+			return ret;
+		};
+
+		// Seed once if sc.options is already loaded; otherwise wait briefly.
+		const seed = () => {
+			try {
+				if (window.sc && sc.options && typeof sc.options.get === 'function') {
+					const v = sc.options.get('ultrawide-width-shrink');
+					if (typeof v === 'number') {
+						localStorage.setItem(SHRINK_STORAGE_KEY, String(clampShrink(v)));
+					}
+					return true;
+				}
+			} catch (_) { /* ignore */ }
+			return false;
+		};
+		if (!seed()) {
+			let tries = 0;
+			const t = setInterval(() => {
+				tries++;
+				if (seed() || tries > 600) clearInterval(t); // ~30s
+			}, 50);
+		}
+
+		ccuw._shrinkMirrorPatched = true;
+		return true;
+	}
+
+	function clampShrink(n) {
+		n = Number(n);
+		if (!isFinite(n)) return 0;
+		if (n < 0) return 0;
+		if (n > 100) return 100;
+		return n;
 	}
 
 	// Install the GUI patch and inject the native option now, retrying briefly
@@ -416,7 +508,8 @@
 		const injected = injectOption();
 		const overlay = patchOverlayCorners();
 		const title = patchTitleParallax();
-		if (patched && injected && overlay && title) return;
+		const shrink = patchShrinkMirror();
+		if (patched && injected && overlay && title && shrink) return;
 
 		let tries = 0;
 		const timer = setInterval(() => {
@@ -425,7 +518,8 @@
 			const o = ccuw._optInjected || injectOption();
 			const ov = ccuw._overlayPatched || patchOverlayCorners();
 			const ti = ccuw._titleParallaxPatched || patchTitleParallax();
-			if ((p && o && ov && ti) || tries > 200) clearInterval(timer); // ~ up to 10s
+			const sh = ccuw._shrinkMirrorPatched || patchShrinkMirror();
+			if ((p && o && ov && ti && sh) || tries > 200) clearInterval(timer); // ~ up to 10s
 		}, 50);
 	}
 

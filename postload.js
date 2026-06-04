@@ -119,27 +119,54 @@
 
 	try {
 		const screen = detectScreen();
-		const { width, height } = compute();
+		const { width: autoWidth, height } = compute();
+
+		// "Ultrawide Width Shrink" slider (set in Options > Video; persisted to
+		// localStorage by prestart.js). Linearly interpolate the chosen width
+		// between the auto-computed ultrawide width (0) and native 568 (100).
+		// Height is intentionally left untouched. UI anchored to ig.system.width
+		// (right-side HUD, menu edges) follows the new width inward automatically.
+		const shrinkPct = readShrinkPct();
+		const shrinkable = Math.max(0, autoWidth - CONFIG.nativeWidth);
+		let width = even(autoWidth - shrinkable * (shrinkPct / 100));
+		if (width < CONFIG.nativeWidth) width = CONFIG.nativeWidth;
 
 		window.IG_WIDTH = width;
 		window.IG_HEIGHT = height;
 
 		// Expose what we did so other mods / the console can read it.
-		window.CC_ULTRAWIDE = {
+		window.CC_ULTRAWIDE = Object.assign(window.CC_ULTRAWIDE || {}, {
 			width,
 			height,
+			autoWidth,
+			shrinkPct,
 			screen,
 			mode: CONFIG.mode,
 			nativeWidth: CONFIG.nativeWidth,
 			nativeHeight: CONFIG.nativeHeight,
-		};
+		});
 
 		console.log(
 			`${TAG} internal resolution -> ${width}x${height} ` +
-			`(native ${CONFIG.nativeWidth}x${CONFIG.nativeHeight}) ` +
+			`(auto ${autoWidth}x${height}, shrink ${shrinkPct}%, ` +
+			`native ${CONFIG.nativeWidth}x${CONFIG.nativeHeight}) ` +
 			`for screen ${screen.w}x${screen.h}, mode='${CONFIG.mode}'.`,
 		);
 	} catch (err) {
 		console.error(`${TAG} failed to apply, falling back to vanilla resolution:`, err);
+	}
+
+	function readShrinkPct() {
+		try {
+			const raw = localStorage.getItem('cc-ultrawide-shrink');
+			if (raw == null) return 0;
+			const n = Number(raw);
+			if (!isFinite(n)) return 0;
+			if (n < 0) return 0;
+			if (n > 100) return 100;
+			return n;
+		} catch (_) {
+			return 0;
+		}
 	}
 })();

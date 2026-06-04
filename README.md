@@ -202,6 +202,28 @@ The option is a normal native setting, so its value persists like any other. Bef
 `sc.options` is ready (very early frames) the mode defaults from
 `window.CC_ULTRAWIDE.uiConfig.defaultMode` (`0` = Off) — you can tweak that in `prestart.js`.
 
+### Setting: Options → Video → "Ultrawide Width Shrink" (notch / bezel safety)
+
+Some displays crop the rendered image — most commonly an **iPhone's camera "island"** when
+mirroring CrossCode to one over AirPlay or similar. The notch leaves a black zone the game would
+otherwise try to draw HUD into. To fix that without giving up integer scaling, this option lets
+you shrink the **internal render width** (height untouched) so the game renders into a narrower
+area with equal letterbox bars on either side — and any UI anchored to the screen edges
+automatically follows the new width inward.
+
+| Slider | Result |
+|--------|--------|
+| **0** (default) | Full ultrawide width (current behaviour). |
+| **50**          | Halfway between full ultrawide and native 16:9. |
+| **100**         | Back to native 568px width (full 16:9 letterboxing). |
+
+The slider linearly interpolates between the auto-computed ultrawide width and the native
+568px, so a small value (e.g. 10–20) gives a small symmetric inset — usually enough to clear an
+iPhone-style camera notch. **Takes effect on the next game launch** (postload runs before
+`ig.main`, so live resize isn't supported). The chosen value is persisted by `sc.options` and
+mirrored to `localStorage` under `cc-ultrawide-shrink` so the next launch can pick it up before
+the option system is alive.
+
 ---
 
 ## Resolution-correctness fixes
@@ -292,3 +314,21 @@ updates, and is trivial to enable/disable.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+---
+
+## Releases
+
+Releases are fully automated by [`.github/workflows/release.yml`](.github/workflows/release.yml):
+
+- **Every push to `main`** bumps the **patch** (`z`) in `x.y.z`, creates the matching `vX.Y.Z`
+  tag, builds the `.ccmod` package, and publishes a GitHub Release with it attached.
+- **Manual dispatch** — go to the repo's **Actions → Release → Run workflow** button and pick
+  `minor` (resets patch to 0) or `major` (resets minor + patch to 0). Same packaging + release
+  steps as the auto path.
+
+The bump commit is authored by `github-actions[bot]`; GitHub's default `GITHUB_TOKEN` does **not**
+re-trigger workflows, so the bot's own commit cannot start an infinite loop. A second-line `if:`
+guard in the workflow rejects it anyway. Each release ships only the runtime + docs
+(`ccmod.json`, `postload.js`, `prestart.js`, `README.md`, `LICENSE`) — dev-only files like
+`install.ps1` and `.github/` are intentionally excluded from the `.ccmod`.
