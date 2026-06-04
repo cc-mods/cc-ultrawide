@@ -171,23 +171,24 @@ The chosen values are logged to the dev console (`F12`) and exposed on
 
 Some displays crop the rendered image — most commonly an **iPhone's camera "island"** when
 mirroring CrossCode to one over AirPlay or similar. The notch leaves a black zone the game would
-otherwise try to draw HUD into. To fix that without giving up integer scaling, this option lets
-you shrink the **internal render width** (height untouched) so the game renders into a narrower
-area with equal letterbox bars on either side — and any UI anchored to the screen edges
-automatically follows the new width inward.
+otherwise try to draw HUD into. This slider pulls **menu buttons and HUD elements** (health,
+etc.) inward from the screen edges, leaving symmetric empty space on the left and right where
+the notch / bezel sits. The **game world / FOV is unchanged**.
 
 | Slider | Result |
 |--------|--------|
-| **0** (default) | Full ultrawide width (current behaviour). |
-| **50**          | Halfway between full ultrawide and native 16:9. |
-| **100**         | Back to native 568px width (full 16:9 letterboxing). |
+| **0** (default) | No shrink — UI sits at the screen edges (vanilla). |
+| **10–20**       | Small symmetric inset — usually enough to clear an iPhone camera notch. |
+| **50**          | Halfway between vanilla and native 16:9 layout. |
+| **100**         | The whole UI lays out at native 568 width, centred. |
 
-The slider linearly interpolates between the auto-computed ultrawide width and the native
-568px, so a small value (e.g. 10–20) gives a small symmetric inset — usually enough to clear an
-iPhone-style camera notch. **Takes effect on the next game launch** (postload runs before
-`ig.main`, so live resize isn't supported). The chosen value is persisted by `sc.options` and
-mirrored to `localStorage` under `cc-ultrawide-shrink` so the next launch can pick it up before
-the option system is alive.
+**How it works:** `prestart.js` patches the top-level GUI layout pass
+(`ig.Gui#_updateRecursive`) to lay everything out inside a centred narrower box whose width is
+linearly interpolated between the full screen (0) and native 568 (100). Right-anchored elements
+follow the new right edge inward, left-anchored ones follow the new left edge inward, and
+centred elements stay in the absolute screen centre. Full-bleed elements (screen-fade overlays,
+full-screen background art) are left covering the entire screen so shrinking only affects
+edge-anchored UI. **Changes take effect live** — drag the slider and the HUD moves immediately.
 
 ---
 

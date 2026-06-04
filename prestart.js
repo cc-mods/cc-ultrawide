@@ -36,13 +36,23 @@
  *        Changelog are separate GUIs and are untouched. No-op at native width.
  *
  *     3. Native "Ultrawide Width Shrink" option (Options > Video)
- *        ARRAY_SLIDER 0..100. Shrinks the internal render WIDTH only (height
- *        untouched) for displays with a notch / bezel (e.g. AirPlay to an iPhone
- *        with a camera island). UI anchored to ig.system.width automatically
- *        follows the new width inward. The actual shrink is applied by
- *        postload.js (which must run BEFORE ig.main); this file mirrors the
- *        persisted value to a dedicated localStorage key on every change so
- *        postload can read it on the next launch before sc.options exists.
+ *        ARRAY_SLIDER 0..100. Brings UI anchored to the screen edges inward —
+ *        right-side HUD (health, etc.) and menu buttons move closer to the
+ *        centre, leaving symmetric empty space at the left/right edges. The
+ *        WORLD render (camera FOV) is untouched. Useful for displays with a
+ *        notch / bezel (e.g. AirPlay to an iPhone with a camera island). 0 = no
+ *        shrink (vanilla). 100 = the GUI is laid out at native 568 width,
+ *        centred. Changes take effect LIVE (no relaunch needed) because we
+ *        patch the top-level GUI layout pass (ig.Gui#_updateRecursive) and read
+ *        the option value each frame.
+ *
+ *        Full-screen background art / screen-fade overlays / the env edge tint
+ *        are kept full-bleed (they still cover the entire screen) so shrinking
+ *        only affects elements that anchor to the layout box edges. The shrink
+ *        is implemented as a centred narrower top-level box: full-bleed hooks
+ *        get their pos.x compensated by -offX so they continue to draw at
+ *        screen 0..sw, while every other hook lays out inside the smaller box,
+ *        moving X_LEFT/X_RIGHT anchored elements inward by offX automatically.
  *
  *   Everything is wrapped in try/catch and gated behind "bigger than native"
  *   checks where applicable, so any failure falls back to vanilla behaviour
@@ -57,12 +67,39 @@
 	// vanilla IG_WIDTH and is independent of the widened gameplay width.
 	const NATIVE_GUI_WIDTH = 568;
 
-	// Persisted localStorage key read by postload.js on the NEXT launch.
-	const SHRINK_STORAGE_KEY = 'cc-ultrawide-shrink';
-
 	// Shared state (postload.js may already have created window.CC_ULTRAWIDE).
 	const ccuw = (window.CC_ULTRAWIDE = window.CC_ULTRAWIDE || {});
 	ccuw.guiWidth = NATIVE_GUI_WIDTH;
+
+	const ALIGN = (window.ig && ig.GUI_ALIGN) || { X_LEFT: 4, X_CENTER: 5, X_RIGHT: 6 };
+
+	// Is this hook full-screen background art (as opposed to a menu/HUD piece)?
+	function isArt(hook) {
+		const g = hook.gui;
+		if (!g) return false;
+		if (typeof ig.ParallaxGui === 'function' && g instanceof ig.ParallaxGui) return true;
+		if (typeof ig.ImageGui === 'function' && g instanceof ig.ImageGui) return true;
+		return false;
+	}
+
+	function clampShrink(n) {
+		n = Number(n);
+		if (!isFinite(n)) return 0;
+		if (n < 0) return 0;
+		if (n > 100) return 100;
+		return n;
+	}
+
+	// Read the current "Ultrawide Width Shrink" value from sc.options (live).
+	function currentShrinkPct() {
+		try {
+			if (window.sc && sc.options && typeof sc.options.get === 'function') {
+				const v = sc.options.get('ultrawide-width-shrink');
+				if (typeof v === 'number') return clampShrink(v);
+			}
+		} catch (_) { /* fall through */ }
+		return 0;
+	}
 
 	// --- Environmental edge-tint overlay height fix ------------------------
 	function patchOverlayCorners() {
@@ -150,12 +187,12 @@
 	const LANG = {
 		'sc.gui.options.ultrawide-width-shrink.name': 'Ultrawide Width Shrink',
 		'sc.gui.options.ultrawide-width-shrink.description':
-			'Shrinks the rendered width to add equal letterbox bars on the left ' +
-			'and right (height is unchanged). Useful for displays with a notch / ' +
-			'bezel (e.g. AirPlay to an iPhone with a camera island). 0 = full ' +
-			'ultrawide width; 100 = back to native 16:9 width. UI anchored to the ' +
-			'screen edges follows the new width inward. ' +
-			'TAKES EFFECT ON THE NEXT GAME LAUNCH.',
+			'Pulls menu buttons and HUD elements (health, etc.) inward from the ' +
+			'screen edges, leaving symmetric empty space on the left and right. ' +
+			'The game world / FOV is unchanged. Useful for displays with a notch ' +
+			'or bezel (e.g. AirPlay to an iPhone with a camera island). 0 = no ' +
+			'shrink; 100 = the whole UI is laid out at native 16:9 width, centred. ' +
+			'Takes effect live.',
 	};
 
 	function patchLang() {
@@ -192,71 +229,104 @@
 		}
 	}
 
-	// Mirror the persisted "ultrawide-width-shrink" value into a dedicated
-	// localStorage key so postload.js (which runs BEFORE sc.options exists) can
-	// read it on the next launch and adjust IG_WIDTH accordingly. We patch
-	// sc.OptionModel#set to catch live changes, and also seed the key once after
-	// sc.options has loaded its values from storage (covers the first launch
-	// after the option is added and any "Set to default" path).
-	function patchShrinkMirror() {
-		if (ccuw._shrinkMirrorPatched) return true;
-		if (!(window.sc && sc.OptionModel && sc.OptionModel.prototype)) return false;
+	// --- Live GUI shrink (driven by the option) ----------------------------
+	// Patch the top-level GUI layout pass (ig.Gui#_updateRecursive) to lay the
+	// whole GUI out in a centred, narrower box when the option is > 0. Elements
+	// that are full-bleed (screen-fade overlays, full-screen background art) are
+	// kept covering the entire screen; everything else lays out inside the
+	// smaller box, so X_LEFT / X_RIGHT anchored UI is pulled inward by offX and
+	// X_CENTER stays in the absolute screen centre.
+	function restore(touched) {
+		for (let i = touched.length - 3; i >= 0; i -= 3) {
+			touched[i][touched[i + 1]] = touched[i + 2];
+		}
+	}
 
-		const proto = sc.OptionModel.prototype;
-		const origSet = proto.set;
-		proto.set = function (key, value) {
-			const ret = origSet.apply(this, arguments);
-			try {
-				if (key === 'ultrawide-width-shrink') {
-					localStorage.setItem(SHRINK_STORAGE_KEY, String(clampShrink(value)));
-				}
-			} catch (_) {
-				/* never let storage break the option model */
-			}
-			return ret;
-		};
-
-		// Seed once if sc.options is already loaded; otherwise wait briefly.
-		const seed = () => {
-			try {
-				if (window.sc && sc.options && typeof sc.options.get === 'function') {
-					const v = sc.options.get('ultrawide-width-shrink');
-					if (typeof v === 'number') {
-						localStorage.setItem(SHRINK_STORAGE_KEY, String(clampShrink(v)));
+	function prepareForShrink(hooks, sw, newBoxW, offX, touched) {
+		for (let i = 0; i < hooks.length; i++) {
+			const x = hooks[i];
+			if (!x) continue;
+			if (x.size.x >= sw - 2) {
+				// Full-screen-sized hooks: keep screen-fades and background art
+				// covering the whole screen, regardless of the smaller layout box.
+				const fullBleed = !!x.screenBlocking || isArt(x);
+				if (fullBleed) {
+					if (x.align.x === ALIGN.X_LEFT || x.align.x === ALIGN.X_RIGHT) {
+						touched.push(x.pos, 'x', x.pos.x);
+						x.pos.x = -offX;
 					}
-					return true;
+					// size.x stays = sw, so the hook still spans 0..sw on screen.
+				} else {
+					// Generic full-width UI containers: clamp to the new box so
+					// their children re-anchor inward.
+					touched.push(x.size, 'x', x.size.x);
+					x.size.x = newBoxW;
 				}
-			} catch (_) { /* ignore */ }
+			}
+			const kids = x.children;
+			if (kids && kids.length) prepareForShrink(kids, sw, newBoxW, offX, touched);
+		}
+	}
+
+	function patchGui() {
+		if (ccuw._guiPatched) return true;
+		if (!(window.ig && ig.Gui && ig.Gui.prototype && ig.Gui.prototype._updateRecursive)) {
 			return false;
-		};
-		if (!seed()) {
-			let tries = 0;
-			const t = setInterval(() => {
-				tries++;
-				if (seed() || tries > 600) clearInterval(t); // ~30s
-			}, 50);
 		}
 
-		ccuw._shrinkMirrorPatched = true;
+		const proto = ig.Gui.prototype;
+		const orig = proto._updateRecursive;
+
+		proto._updateRecursive = function (b, c, f, g, h, i, k, q, s, v, y) {
+			// Only intercept the top-level pass (k is the root hook array).
+			if (k === this.guiHooks) {
+				const pct = currentShrinkPct();
+				if (pct > 0) {
+					try {
+						const sw = ig.system.width | 0;
+						const nw = ccuw.guiWidth | 0;
+						if (sw > nw + 1) {
+							// Linearly interpolate the box width between full ultrawide
+							// (pct=0 -> sw) and native (pct=100 -> nw). Even-numbered
+							// pixels avoid half-pixel seams in pixel-art.
+							let shrinkPx = Math.floor((sw - nw) * (pct / 100));
+							if (shrinkPx % 2) shrinkPx -= 1;
+							if (shrinkPx > 0) {
+								const newBoxW = sw - shrinkPx;
+								const offX = shrinkPx >> 1;
+								const touched = [];
+								try {
+									prepareForShrink(this.guiHooks, sw, newBoxW, offX, touched);
+									return orig.call(this, offX, c, newBoxW, g, h, i, k, q, s, v, y);
+								} finally {
+									restore(touched);
+								}
+							}
+						}
+					} catch (err) {
+						if (!ccuw._guiWarned) {
+							ccuw._guiWarned = true;
+							console.error(`${TAG} UI shrink patch failed, using vanilla layout:`, err);
+						}
+					}
+				}
+			}
+			return orig.call(this, b, c, f, g, h, i, k, q, s, v, y);
+		};
+
+		ccuw._guiPatched = true;
+		console.log(`${TAG} UI shrink layout patch installed (native GUI width ${ccuw.guiWidth}).`);
 		return true;
 	}
 
-	function clampShrink(n) {
-		n = Number(n);
-		if (!isFinite(n)) return 0;
-		if (n < 0) return 0;
-		if (n > 100) return 100;
-		return n;
-	}
-
-	// Install the three patches now, retrying briefly if a dependency isn't
+	// Install the four patches now, retrying briefly if a dependency isn't
 	// ready yet.
 	function boot() {
 		const overlay = patchOverlayCorners();
 		const title = patchTitleParallax();
 		const injected = injectOption();
-		const shrink = patchShrinkMirror();
-		if (overlay && title && injected && shrink) return;
+		const gui = patchGui();
+		if (overlay && title && injected && gui) return;
 
 		let tries = 0;
 		const timer = setInterval(() => {
@@ -264,8 +334,8 @@
 			const ov = ccuw._overlayPatched || patchOverlayCorners();
 			const ti = ccuw._titleParallaxPatched || patchTitleParallax();
 			const o = ccuw._optInjected || injectOption();
-			const sh = ccuw._shrinkMirrorPatched || patchShrinkMirror();
-			if ((ov && ti && o && sh) || tries > 200) clearInterval(timer); // ~ up to 10s
+			const gp = ccuw._guiPatched || patchGui();
+			if ((ov && ti && o && gp) || tries > 200) clearInterval(timer); // ~ up to 10s
 		}, 50);
 	}
 
