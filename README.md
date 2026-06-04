@@ -77,19 +77,25 @@ preload   ── runs BEFORE the game's <head> scripts  → IG_WIDTH not set yet
             ↓ game <head> runs: IG_WIDTH = 568, game.compiled.js defines startCrossCode
 postload  ── runs AFTER head scripts, BEFORE ig.main()  ← we override IG_WIDTH HERE ✅
             ↓ ig.main(... IG_WIDTH ...) starts the game with our resolution
-prestart / main / poststart ── after the game has started (too late to change FOV)
+prestart  ── after game classes are defined  ← we patch the GUI layout + add the Video option ✅
+main / poststart ── after the game has started (too late to change FOV)
 ```
 
-So this mod ships a single `postload.js` that overwrites `window.IG_WIDTH` /
-`window.IG_HEIGHT`. That's the whole trick.
+So this mod ships:
 
-A minimal `ccmod.json` wires it up:
+- `postload.js` — overwrites `window.IG_WIDTH` / `window.IG_HEIGHT` (the ultrawide FOV trick).
+- `prestart.js` — patches `ig.Gui#_updateRecursive` so menus, HUD and full-screen art fill the
+  ultrawide screen, and adds an **Ultrawide UI** option to the Video menu
+  (see [Ultrawide UI](#ultrawide-ui-menus-hud--full-screen-art)).
+
+A minimal `ccmod.json` wires them up:
 
 ```json
 {
   "id": "crosscode-ultrawide",
   "version": "1.0.0",
   "postload": "postload.js",
+  "prestart": "prestart.js",
   "dependencies": { "ccloader": ">=2.0.0" }
 }
 ```
@@ -159,6 +165,45 @@ The chosen values are logged to the dev console (`F12`) and exposed on
 
 ---
 
+## Ultrawide UI (menus, HUD & full-screen art)
+
+Widening `IG_WIDTH` gives a wider world, but CrossCode lays out its **GUI** relative to the
+live (now wide) screen. UI authored for the native `568px` width therefore anchors to the
+**left**, spreads to both edges, or — for full-screen background art — fails to fill the new
+width and leaves a black gap. (On the title screen the scene and menu cluster on the left
+while the right-anchored art hugs the far edge.)
+
+`prestart.js` fixes this by patching the GUI layout root (`ig.Gui#_updateRecursive`). When the
+screen is wider than native it lays the whole GUI out in a **native-width box** and then either
+centers or **stretches** it to fill the real screen. Mouse hit-testing is adjusted to match, and
+everything is wrapped in `try/catch` and gated behind the option below, so any failure falls
+back to vanilla layout.
+
+### Setting: Options → Video → "Ultrawide UI"
+
+The behaviour is chosen from a native option added to the normal **Options → Video** menu
+(no extra mod manager required). Regardless of this setting, the **title screen** (the brand-logo
+intro and the main menu) is always auto-centered, since its background and menu otherwise cluster
+to the left:
+
+| Mode                  | Result |
+|-----------------------|--------|
+| **Off** (default)     | Vanilla layout (UI clusters on the left). The title/logo-intro screen is still auto-centered. |
+| **Centered**          | Original 16:9 layout, centered with side bars — keeps pixel art crisp/undistorted. |
+| **Stretched**         | The whole GUI is scaled horizontally to fill the full width. Pixel art is stretched, but nothing clusters or leaves a gap. |
+
+**How stretch works:** the top-level GUI is laid out at native width from the left edge, and the
+entire render is wrapped in a single horizontal scale transform (`s = screenWidth / 568`) pushed
+onto the GUI renderer. The per-element translate transforms the engine already emits get
+multiplied by that scale at draw time, so everything fills the width; we then post-scale every
+hook's `screenCoords.x` / `.w` by the same factor so clicks line up with what's drawn.
+
+The option is a normal native setting, so its value persists like any other. Before
+`sc.options` is ready (very early frames) the mode defaults from
+`window.CC_ULTRAWIDE.uiConfig.defaultMode` (`0` = Off) — you can tweak that in `prestart.js`.
+
+---
+
 ## Installing
 
 The mod folder must live in `CrossCode/assets/mods/`.
@@ -181,8 +226,13 @@ Steam location, and `-Uninstall` to remove the link.
 
 - **Small rooms:** widening the view can reveal empty space past the edges of very small
   maps. Use a smaller `width` (e.g. `aspect` mode) or set `maxAspect` if this bothers you.
-- **HUD spread:** HUD elements anchor to the screen edges, so they sit further apart. This is
-  normal and generally looks good on ultrawide.
+- **HUD position:** with **Ultrawide UI** set to Stretched (default) or Centered the HUD uses
+  the original 16:9 layout scaled/centered to the screen. Set the option to **Off** if you'd
+  rather HUD elements anchor to the screen edges and sit further apart — also fine on ultrawide,
+  just a matter of taste.
+- **Stretched distortion:** the Stretched mode scales pixel art horizontally, so UI art is a
+  little wider than authored. Switch to **Centered** if you prefer crisp, undistorted art with
+  side bars.
 - **Some fixed-size cutscene framing** was authored for 16:9 and may show slightly more than
   intended at the sides. Gameplay is unaffected.
 - **DPI scaling:** if Windows display scaling isn't 100%, `window.screen.width` may not equal

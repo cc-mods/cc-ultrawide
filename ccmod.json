@@ -9,5 +9,6 @@
 	"dependencies": {
 		"ccloader": ">=2.0.0"
 	},
-	"postload": "postload.js"
+	"postload": "postload.js",
+	"prestart": "prestart.js"
 }
