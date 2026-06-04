@@ -84,11 +84,11 @@ main / poststart ── after the game has started (too late to change FOV)
 So this mod ships:
 
 - `postload.js` — overwrites `window.IG_WIDTH` / `window.IG_HEIGHT` (the ultrawide FOV trick).
-- `prestart.js` — patches `ig.Gui#_updateRecursive` so menus, HUD and full-screen art fill the
-  ultrawide screen, adds an **Ultrawide UI** option to the Video menu
-  (see [Ultrawide UI](#ultrawide-ui-menus-hud--full-screen-art)), and applies two
-  resolution-correctness fixes (the environmental edge-tint overlay height and title-screen
-  parallax centering — see [Resolution-correctness fixes](#resolution-correctness-fixes)).
+- `prestart.js` — applies two resolution-correctness fixes (the environmental edge-tint overlay
+  height and title-screen parallax centering — see
+  [Resolution-correctness fixes](#resolution-correctness-fixes)) and adds an
+  **Ultrawide Width Shrink** option to the Video menu (see
+  [Ultrawide Width Shrink](#options--video--ultrawide-width-shrink-notch--bezel-safety)).
 
 A minimal `ccmod.json` wires them up:
 
@@ -167,42 +167,7 @@ The chosen values are logged to the dev console (`F12`) and exposed on
 
 ---
 
-## Ultrawide UI (menus, HUD & full-screen art)
-
-Widening `IG_WIDTH` gives a wider world, but CrossCode lays out its **GUI** relative to the
-live (now wide) screen. UI authored for the native `568px` width therefore anchors to the
-**left**, spreads to both edges, or — for full-screen background art — fails to fill the new
-width and leaves a black gap. (On the title screen the scene and menu cluster on the left
-while the right-anchored art hugs the far edge.)
-
-`prestart.js` fixes this by patching the GUI layout root (`ig.Gui#_updateRecursive`). When the
-screen is wider than native it lays the whole GUI out in a **native-width box** and then either
-centers or **stretches** it to fill the real screen. Mouse hit-testing is adjusted to match, and
-everything is wrapped in `try/catch` and gated behind the option below, so any failure falls
-back to vanilla layout.
-
-### Setting: Options → Video → "Ultrawide UI"
-
-The behaviour is chosen from a native option added to the normal **Options → Video** menu
-(no extra mod manager required):
-
-| Mode                  | Result |
-|-----------------------|--------|
-| **Off** (default)     | Vanilla layout. On ultrawide the native HUD/menu layout still reads correctly and pixel art stays crisp, so this is the recommended setting. |
-| **Centered**          | Original 16:9 layout, centered with side bars — keeps pixel art crisp/undistorted. |
-| **Stretched**         | The whole GUI is scaled horizontally to fill the full width. Pixel art is stretched, but nothing clusters or leaves a gap. |
-
-**How stretch works:** the top-level GUI is laid out at native width from the left edge, and the
-entire render is wrapped in a single horizontal scale transform (`s = screenWidth / 568`) pushed
-onto the GUI renderer. The per-element translate transforms the engine already emits get
-multiplied by that scale at draw time, so everything fills the width; we then post-scale every
-hook's `screenCoords.x` / `.w` by the same factor so clicks line up with what's drawn.
-
-The option is a normal native setting, so its value persists like any other. Before
-`sc.options` is ready (very early frames) the mode defaults from
-`window.CC_ULTRAWIDE.uiConfig.defaultMode` (`0` = Off) — you can tweak that in `prestart.js`.
-
-### Setting: Options → Video → "Ultrawide Width Shrink" (notch / bezel safety)
+## Options → Video → "Ultrawide Width Shrink" (notch / bezel safety)
 
 Some displays crop the rendered image — most commonly an **iPhone's camera "island"** when
 mirroring CrossCode to one over AirPlay or similar. The notch leaves a black zone the game would
@@ -228,10 +193,9 @@ the option system is alive.
 
 ## Resolution-correctness fixes
 
-These two `prestart.js` patches are **independent of the Ultrawide UI mode** above. They simply
-correct draws that the engine sizes from the (now taller/wider) live resolution, and are no-ops
-at native resolution. Both are gated behind a "bigger than native" check and wrapped in
-`try/catch` with a vanilla fallback.
+These two `prestart.js` patches are **always on**. They simply correct draws that the engine
+sizes from the (now taller/wider) live resolution, and are no-ops at native resolution. Both are
+gated behind a "bigger than native" check and wrapped in `try/catch` with a vanilla fallback.
 
 ### Environmental edge-tint overlay height
 
@@ -282,13 +246,6 @@ Steam location, and `-Uninstall` to remove the link.
 
 - **Small rooms:** widening the view can reveal empty space past the edges of very small
   maps. Use a smaller `width` (e.g. `aspect` mode) or set `maxAspect` if this bothers you.
-- **HUD position:** with **Ultrawide UI** left at **Off** (default) the native HUD/menu layout is
-  used, which reads correctly on ultrawide. Set it to **Centered** or **Stretched** if you'd
-  rather the GUI be centered with side bars or scaled to fill the full width — purely a matter of
-  taste.
-- **Stretched distortion:** the Stretched mode scales pixel art horizontally, so UI art is a
-  little wider than authored. Switch to **Centered** if you prefer crisp, undistorted art with
-  side bars.
 - **Some fixed-size cutscene framing** was authored for 16:9 and may show slightly more than
   intended at the sides. Gameplay is unaffected.
 - **DPI scaling:** if Windows display scaling isn't 100%, `window.screen.width` may not equal
