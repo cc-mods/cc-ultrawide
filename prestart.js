@@ -297,6 +297,45 @@
 		return true;
 	}
 
+	// --- Title-screen parallax centering -----------------------------------
+	// The title background (ig.ParallaxGui with parallax "title") is built from
+	// 568px-wide native art. Left-anchored layers (sky/ground/railings) fill the
+	// left 568px while right-anchored layers (clouds1, the "lea" character) snap
+	// to the far-right screen edge, leaving the scene off-centre with a black gap
+	// on the right. We size the parallax hook to the native 568px and centre it
+	// horizontally, so the whole scene (including lea) lands in the middle with
+	// symmetric letterbox bars. The menu buttons / DLC / Changelog are separate
+	// GUIs and keep their own edge anchoring, untouched. Title parallax only.
+	function patchTitleParallax() {
+		if (ccuw._titleParallaxPatched) return true;
+		if (!(window.ig && ig.ParallaxGui && ig.ParallaxGui.prototype)) return false;
+
+		const proto = ig.ParallaxGui.prototype;
+		const origInit = proto.init;
+
+		proto.init = function (b, a) {
+			origInit.call(this, b, a);
+			try {
+				if (b && b.parallax === 'title') {
+					const w = ccuw.guiWidth || 568;
+					if (ig.system.width > w) {
+						this.hook.size.x = w;
+						this.hook.pos.x = Math.floor((ig.system.width - w) / 2);
+					}
+				}
+			} catch (err) {
+				if (!ccuw._titleParallaxWarned) {
+					ccuw._titleParallaxWarned = true;
+					console.error(`${TAG} title parallax centering failed:`, err);
+				}
+			}
+		};
+
+		ccuw._titleParallaxPatched = true;
+		console.log(`${TAG} title parallax centering installed.`);
+		return true;
+	}
+
 	// --- Native Options > Video entry --------------------------------------
 	// Adds an "Ultrawide UI" BUTTON_GROUP (Off / Centered / Stretched) to the
 	// native VIDEO options category and supplies its localization by wrapping
@@ -353,7 +392,8 @@
 		const patched = patchGui();
 		const injected = injectOption();
 		const overlay = patchOverlayCorners();
-		if (patched && injected && overlay) return;
+		const title = patchTitleParallax();
+		if (patched && injected && overlay && title) return;
 
 		let tries = 0;
 		const timer = setInterval(() => {
@@ -361,7 +401,8 @@
 			const p = ccuw._guiPatched || patchGui();
 			const o = ccuw._optInjected || injectOption();
 			const ov = ccuw._overlayPatched || patchOverlayCorners();
-			if ((p && o && ov) || tries > 200) clearInterval(timer); // ~ up to 10s
+			const ti = ccuw._titleParallaxPatched || patchTitleParallax();
+			if ((p && o && ov && ti) || tries > 200) clearInterval(timer); // ~ up to 10s
 		}, 50);
 	}
 
