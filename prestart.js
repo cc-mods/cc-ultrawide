@@ -22,9 +22,10 @@
  *   real screen. The behaviour is chosen from a new native option that lives in
  *   the normal Options -> Video menu ("Ultrawide UI"):
  *
- *     - Off       : vanilla behaviour (UI clusters left).
- *     - Centered  : original 16:9 layout, centered with side bars (default,
- *                   crisp art).
+ *     - Off       : vanilla behaviour (UI clusters left). DEFAULT — the native
+ *                   HUD/menu layout reads correctly on ultrawide and keeps pixel
+ *                   art crisp, so it is the recommended setting.
+ *     - Centered  : original 16:9 layout, centered with side bars (crisp art).
  *     - Stretched : the whole GUI is scaled horizontally to fill the full width.
  *                   Pixel art is stretched, but nothing clusters or leaves a gap.
  *
@@ -39,8 +40,30 @@
  *   CENTER lays the top-level GUI out in a native-width box centered on screen
  *   and clamps full-screen-sized hooks back to native width.
  *
- *   Everything is wrapped in try/catch and gated behind the option, so any
- *   failure falls back to vanilla behaviour rather than breaking the game.
+ *   TWO RESOLUTION-CORRECTNESS FIXES (independent of the mode above; always on
+ *   when the screen is taller/wider than native):
+ *
+ *     1. Environmental edge-tint overlay (ig.OverlayCornerGui). The soft black/
+ *        red/white edge vignette used in caves, hot zones, etc. draws a 240x320
+ *        image anchored to the TOP at native pixel height, mirrored on the left/
+ *        right edges. Its width follows ig.system.width (the right copy anchors
+ *        to the right edge) but its HEIGHT stays the image's native 320px, so on
+ *        a taller internal resolution the tint stops short of the bottom. We wrap
+ *        the two image draws in a vertical scale transform so the tint fills the
+ *        real screen height. ig.Image#draw is crop-only and refuses sizes larger
+ *        than the source, which is why a transform (not a dest size) is used.
+ *
+ *     2. Title-screen parallax (ig.ParallaxGui, parallax "title"). The title
+ *        background is built from 568px-wide native art; left-anchored layers
+ *        fill the left 568px while right-anchored layers (clouds, the "lea"
+ *        character) snap to the far-right edge, leaving the scene off-centre with
+ *        a black gap. We size that parallax's hook to native width and centre it,
+ *        so the whole scene lands in the middle with symmetric letterbox bars.
+ *        The menu buttons / DLC / Changelog are separate GUIs and are untouched.
+ *
+ *   Everything is wrapped in try/catch and gated behind a "wider/taller than
+ *   native" check (and, for the layout modes, the option), so any failure falls
+ *   back to vanilla behaviour rather than breaking the game.
  *
  *   prestart runs after the game's classes/modules are defined, which is when
  *   ig.Gui and sc.OPTIONS_DEFINITION exist and can be patched, but before the

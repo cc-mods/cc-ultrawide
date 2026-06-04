@@ -85,8 +85,10 @@ So this mod ships:
 
 - `postload.js` — overwrites `window.IG_WIDTH` / `window.IG_HEIGHT` (the ultrawide FOV trick).
 - `prestart.js` — patches `ig.Gui#_updateRecursive` so menus, HUD and full-screen art fill the
-  ultrawide screen, and adds an **Ultrawide UI** option to the Video menu
-  (see [Ultrawide UI](#ultrawide-ui-menus-hud--full-screen-art)).
+  ultrawide screen, adds an **Ultrawide UI** option to the Video menu
+  (see [Ultrawide UI](#ultrawide-ui-menus-hud--full-screen-art)), and applies two
+  resolution-correctness fixes (the environmental edge-tint overlay height and title-screen
+  parallax centering — see [Resolution-correctness fixes](#resolution-correctness-fixes)).
 
 A minimal `ccmod.json` wires them up:
 
@@ -182,13 +184,11 @@ back to vanilla layout.
 ### Setting: Options → Video → "Ultrawide UI"
 
 The behaviour is chosen from a native option added to the normal **Options → Video** menu
-(no extra mod manager required). Regardless of this setting, the **title screen** (the brand-logo
-intro and the main menu) is always auto-centered, since its background and menu otherwise cluster
-to the left:
+(no extra mod manager required):
 
 | Mode                  | Result |
 |-----------------------|--------|
-| **Off** (default)     | Vanilla layout (UI clusters on the left). The title/logo-intro screen is still auto-centered. |
+| **Off** (default)     | Vanilla layout. On ultrawide the native HUD/menu layout still reads correctly and pixel art stays crisp, so this is the recommended setting. |
 | **Centered**          | Original 16:9 layout, centered with side bars — keeps pixel art crisp/undistorted. |
 | **Stretched**         | The whole GUI is scaled horizontally to fill the full width. Pixel art is stretched, but nothing clusters or leaves a gap. |
 
@@ -201,6 +201,40 @@ hook's `screenCoords.x` / `.w` by the same factor so clicks line up with what's 
 The option is a normal native setting, so its value persists like any other. Before
 `sc.options` is ready (very early frames) the mode defaults from
 `window.CC_ULTRAWIDE.uiConfig.defaultMode` (`0` = Off) — you can tweak that in `prestart.js`.
+
+---
+
+## Resolution-correctness fixes
+
+These two `prestart.js` patches are **independent of the Ultrawide UI mode** above. They simply
+correct draws that the engine sizes from the (now taller/wider) live resolution, and are no-ops
+at native resolution. Both are gated behind a "bigger than native" check and wrapped in
+`try/catch` with a vanilla fallback.
+
+### Environmental edge-tint overlay height
+
+The soft black / red / white edge vignette used in caves, hot zones, etc. is drawn by
+`ig.OverlayCornerGui` from a `240×320` image, anchored to the **top**, mirrored on the left and
+right edges. Its *width* follows `ig.system.width` (the right copy anchors to the right edge),
+but its *height* stays the image's native 320px — so on a taller internal resolution the tint
+stopped short of the screen bottom (the bottom corners sat too high). We patch
+`ig.OverlayCornerGui#updateDrawables` to wrap the two image draws in a **vertical scale
+transform** (`scaleY = ig.system.height / gfx.height`) so the tint fills the full height.
+(`ig.Image#draw` is crop-only and refuses sizes larger than the source, so a transform — not a
+destination size — is required.)
+
+### Title-screen parallax centering
+
+The title background (`ig.ParallaxGui`, parallax `"title"`) is built from `568px`-wide native
+art. Left-anchored layers (sky / ground / railings) fill the left 568px, while right-anchored
+layers (clouds and the **Lea** character) snap to the far-right screen edge — leaving the scene
+off-centre with a black gap. We patch `ig.ParallaxGui#init` for the `"title"` parallax only,
+sizing its hook to native width and **centering it**, so the whole scene lands in the middle with
+symmetric letterbox bars. The menu buttons, DLC and Changelog entries are separate GUIs and keep
+their own edge anchoring.
+
+> The brand-logo intro that plays *before* the title settles still slides in from the sides; that
+> animation is left as-is (purely cosmetic, only on first load).
 
 ---
 
@@ -226,10 +260,10 @@ Steam location, and `-Uninstall` to remove the link.
 
 - **Small rooms:** widening the view can reveal empty space past the edges of very small
   maps. Use a smaller `width` (e.g. `aspect` mode) or set `maxAspect` if this bothers you.
-- **HUD position:** with **Ultrawide UI** set to Stretched (default) or Centered the HUD uses
-  the original 16:9 layout scaled/centered to the screen. Set the option to **Off** if you'd
-  rather HUD elements anchor to the screen edges and sit further apart — also fine on ultrawide,
-  just a matter of taste.
+- **HUD position:** with **Ultrawide UI** left at **Off** (default) the native HUD/menu layout is
+  used, which reads correctly on ultrawide. Set it to **Centered** or **Stretched** if you'd
+  rather the GUI be centered with side bars or scaled to fill the full width — purely a matter of
+  taste.
 - **Stretched distortion:** the Stretched mode scales pixel art horizontally, so UI art is a
   little wider than authored. Switch to **Centered** if you prefer crisp, undistorted art with
   side bars.
