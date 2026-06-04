@@ -1,6 +1,6 @@
 {
 	"id": "crosscode-ultrawide",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"title": "CrossCode Ultrawide",
 	"description": "Renders CrossCode at an ultrawide aspect ratio by widening the internal render viewport. This gives a genuinely wider field of view (you see more of the world) instead of a stretched image, and supports pixel-perfect integer scaling.",
 	"repository": "https://github.com/Yoyokrazy/crosscode-ultrawide",
