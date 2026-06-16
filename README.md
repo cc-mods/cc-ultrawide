@@ -10,7 +10,7 @@ of view** — you see more of the game world — instead of a stretched 16:9 ima
 ## TL;DR — how to use
 
 1. Install [CCLoader](https://github.com/CCDirectLink/CCLoader) (you already have it).
-2. Put this mod's folder at `CrossCode/assets/mods/crosscode-ultrawide/`
+2. Put this mod's folder at `CrossCode/assets/mods/cc-ultrawide/`
    (or run `install.ps1` — see [Installing](#installing)).
 3. Launch CrossCode.
 4. In **Options → Video**: set **Display Type = Fit** and **Pixel Size = 4**.
@@ -18,6 +18,12 @@ of view** — you see more of the game world — instead of a stretched 16:9 ima
    `--force-device-scale-factor=1`
 
 You should now have a sharp, wider view that fills your ultrawide monitor.
+
+> **One-click install:** this mod is part of the [**cc-mods**](https://github.com/cc-mods) suite.
+> On the [**cc-ios**](https://github.com/cc-mods/cc-ios) iPhone wrapper it shows up in the in-game
+> **Mods** tab automatically. On desktop, add the `@cc-mods/CCModDB/stable` repository in
+> CCModManager → Settings → Repositories for one-click install, or just drop the `.ccmod` from
+> [Releases](https://github.com/cc-mods/cc-ultrawide/releases) into `assets/mods/`.
 
 ---
 
@@ -94,7 +100,7 @@ A minimal `ccmod.json` wires them up:
 
 ```json
 {
-  "id": "crosscode-ultrawide",
+  "id": "cc-ultrawide",
   "version": "1.0.0",
   "postload": "postload.js",
   "prestart": "prestart.js",
@@ -229,7 +235,7 @@ their own edge anchoring.
 
 The mod folder must live in `CrossCode/assets/mods/`.
 
-**Option A — copy:** copy this folder into `…/CrossCode/assets/mods/crosscode-ultrawide/`.
+**Option A — copy:** copy this folder into `…/CrossCode/assets/mods/cc-ultrawide/`.
 
 **Option B — symlink (keeps it in sync with this repo):** from an *admin* PowerShell, run:
 
@@ -288,5 +294,5 @@ Releases are fully automated by [`.github/workflows/release.yml`](.github/workfl
 The bump commit is authored by `github-actions[bot]`; GitHub's default `GITHUB_TOKEN` does **not**
 re-trigger workflows, so the bot's own commit cannot start an infinite loop. A second-line `if:`
 guard in the workflow rejects it anyway. Each release ships only the runtime + docs
-(`ccmod.json`, `postload.js`, `prestart.js`, `README.md`, `LICENSE`) — dev-only files like
-`install.ps1` and `.github/` are intentionally excluded from the `.ccmod`.
+(`ccmod.json`, `package.json`, `postload.js`, `prestart.js`, `icon.png`, `README.md`, `LICENSE`) —
+dev-only files like `install.ps1` and `.github/` are intentionally excluded from the `.ccmod`.

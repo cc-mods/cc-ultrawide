@@ -61,7 +61,7 @@
 (() => {
 	'use strict';
 
-	const TAG = '[crosscode-ultrawide]';
+	const TAG = '[cc-ultrawide]';
 
 	// Native logical UI width the menus/HUD were authored for. This is the
 	// vanilla IG_WIDTH and is independent of the widened gameplay width.

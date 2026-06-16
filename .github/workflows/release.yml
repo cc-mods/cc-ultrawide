@@ -72,6 +72,7 @@ jobs:
           echo "Bumping ${CURRENT} -> ${NEW} (${{ steps.bump.outputs.type }})"
           # Preserve tab indentation and trailing newline so the diff stays clean.
           node -e "const fs=require('fs');const p='./ccmod.json';const j=JSON.parse(fs.readFileSync(p,'utf8'));j.version='${NEW}';fs.writeFileSync(p, JSON.stringify(j, null, '\t') + '\n');"
+          node -e "const fs=require('fs');const p='./package.json';if(fs.existsSync(p)){const j=JSON.parse(fs.readFileSync(p,'utf8'));j.version='${NEW}';fs.writeFileSync(p, JSON.stringify(j, null, '\t') + '\n');}"
           echo "version=${NEW}" >> "$GITHUB_OUTPUT"
 
       - name: Commit, tag, push
@@ -81,7 +82,7 @@ jobs:
           set -euo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ccmod.json
+          git add ccmod.json package.json
           # If nothing actually changed (unlikely), skip cleanly.
           if git diff --cached --quiet; then
             echo "No changes to commit; aborting."
@@ -101,8 +102,8 @@ jobs:
           STAGE="$(mktemp -d)"
           # Ship only the runtime + docs. Exclude dev-only files (install.ps1,
           # .github/, .git/, .gitignore, packaged archives).
-          cp ccmod.json postload.js prestart.js README.md LICENSE "$STAGE/"
-          ASSET="crosscode-ultrawide-${NEW_VERSION}.ccmod"
+          cp ccmod.json package.json postload.js prestart.js icon.png README.md LICENSE "$STAGE/"
+          ASSET="cc-ultrawide-${NEW_VERSION}.ccmod"
           ( cd "$STAGE" && zip -r "${GITHUB_WORKSPACE}/${ASSET}" . )
           ls -la "${GITHUB_WORKSPACE}/${ASSET}"
           echo "asset=${ASSET}" >> "$GITHUB_OUTPUT"

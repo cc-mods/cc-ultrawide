@@ -29,7 +29,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$modName  = 'crosscode-ultrawide'
+$modName  = 'cc-ultrawide'
 $source   = $PSScriptRoot
 $modsDir  = Join-Path $GamePath 'assets\mods'
 $target   = Join-Path $modsDir $modName

@@ -27,7 +27,7 @@
 (() => {
 	'use strict';
 
-	const TAG = '[crosscode-ultrawide]';
+	const TAG = '[cc-ultrawide]';
 
 	const CONFIG = {
 		/*
