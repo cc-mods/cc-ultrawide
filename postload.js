@@ -63,8 +63,9 @@
 		manualWidth: 860,
 		manualHeight: 360,
 
-		// Force a specific screen size instead of auto-detecting (0 = auto-detect).
-		// Useful if Windows DPI scaling reports a wrong size; otherwise leave at 0.
+		// Force a specific viewport size instead of auto-detecting (0 = auto-detect).
+		// Useful if DPI scaling reports a wrong size, or to pin a target regardless of the
+		// current window. Otherwise leave at 0 and the mod uses the live game window size.
 		screenWidth: 0,
 		screenHeight: 0,
 
@@ -74,9 +75,20 @@
 		maxAspect: 0,
 	};
 
-	function detectScreen() {
-		const w = CONFIG.screenWidth || (window.screen && window.screen.width) || 1920;
-		const h = CONFIG.screenHeight || (window.screen && window.screen.height) || 1080;
+	// What drawable area should we fill? Prefer the actual game WINDOW (innerWidth/innerHeight)
+	// over the MONITOR (screen.width/height). Reading the monitor is wrong when the game runs in
+	// a window: on an ultrawide monitor a 16:9 game window would otherwise get an ultrawide FOV
+	// squished into it. innerWidth/innerHeight is the real canvas area the game fills, so the FOV
+	// matches what you actually see — native when windowed 16:9, ultrawide only when the window
+	// truly fills an ultrawide screen. A manual CONFIG override always wins; we fall back to the
+	// monitor, then a sane default.
+	function detectViewport() {
+		const w = CONFIG.screenWidth
+			|| (window.innerWidth > 0 ? window.innerWidth : 0)
+			|| (window.screen && window.screen.width) || 1920;
+		const h = CONFIG.screenHeight
+			|| (window.innerHeight > 0 ? window.innerHeight : 0)
+			|| (window.screen && window.screen.height) || 1080;
 		return { w, h };
 	}
 
@@ -87,7 +99,7 @@
 	}
 
 	function compute() {
-		const { w: sw, h: sh } = detectScreen();
+		const { w: sw, h: sh } = detectViewport();
 		const nativeAspect = CONFIG.nativeWidth / CONFIG.nativeHeight;
 		let width, height;
 
@@ -134,7 +146,7 @@
 	}
 
 	try {
-		const screen = detectScreen();
+		const viewport = detectViewport();
 		const { width, height } = compute();
 
 		window.IG_WIDTH = width;
@@ -144,7 +156,8 @@
 		window.CC_ULTRAWIDE = Object.assign(window.CC_ULTRAWIDE || {}, {
 			width,
 			height,
-			screen,
+			viewport,
+			screen: viewport,
 			mode: CONFIG.mode,
 			nativeWidth: CONFIG.nativeWidth,
 			nativeHeight: CONFIG.nativeHeight,
@@ -153,7 +166,7 @@
 		console.log(
 			`${TAG} internal resolution -> ${width}x${height} ` +
 			`(native ${CONFIG.nativeWidth}x${CONFIG.nativeHeight}) ` +
-			`for screen ${screen.w}x${screen.h}, mode='${CONFIG.mode}'.`,
+			`for window ${viewport.w}x${viewport.h}, mode='${CONFIG.mode}'.`,
 		);
 	} catch (err) {
 		console.error(`${TAG} failed to apply, falling back to vanilla resolution:`, err);
