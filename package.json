@@ -6,6 +6,6 @@
 	"postload": "postload.js",
 	"prestart": "prestart.js",
 	"ccmodDependencies": {
-		"ccloader": ">=2.0.0"
+		"crosscode": "^1.1.0 || 1.0.2"
 	}
 }

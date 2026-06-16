@@ -109,7 +109,7 @@ A minimal `ccmod.json` wires them up:
   "version": "1.0.0",
   "postload": "postload.js",
   "prestart": "prestart.js",
-  "dependencies": { "ccloader": ">=2.0.0" }
+  "dependencies": { "crosscode": "^1.1.0 || 1.0.2" }
 }
 ```
 
