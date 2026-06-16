@@ -2,16 +2,17 @@
 
 Part of the **[cc-mods](https://github.com/cc-mods)** CrossCode suite (ultrawide field-of-view mod).
 
-📓 **Read the knowledge base first:**
-**[`cc-mods/knowledge`](https://github.com/cc-mods/knowledge)** (private; org members only) is the
-source of truth for hard-won findings. Most relevant here:
-- [`cc-ultrawide.md`](https://github.com/cc-mods/knowledge/blob/main/cc-ultrawide.md) — how the FOV
+📓 **Read the suite agent docs first:**
+**[`cc-mods/cc-agentdocs`](https://github.com/cc-mods/cc-agentdocs)** (private; org members only) is the
+source of truth for hard-won findings — start at its
+[`AGENTS.md`](https://github.com/cc-mods/cc-agentdocs/blob/main/AGENTS.md). Most relevant here:
+- [`cc-ultrawide.md`](https://github.com/cc-mods/cc-agentdocs/blob/main/cc-ultrawide.md) — how the FOV
   works and the two bugs fixed in testing (aspect logic; **size to the game window, not the
   monitor**).
-- [`crosscode-modding.md`](https://github.com/cc-mods/knowledge/blob/main/crosscode-modding.md) —
+- [`crosscode-modding.md`](https://github.com/cc-mods/cc-agentdocs/blob/main/crosscode-modding.md) —
   CCLoader load stages, the fatal-404 asset rule, valid tags.
 
-**When you learn something durable, add it to `cc-mods/knowledge`** and keep this pointer intact.
+**When you learn something durable, add it to `cc-mods/cc-agentdocs`** and keep this pointer intact.
 
 ## What this is
 
