@@ -32,19 +32,24 @@
 	const CONFIG = {
 		/*
 		 * mode:
-		 *   'auto-integer' (default) — Pick the largest INTEGER scale that fills your
-		 *       monitor's height. Result is pixel-perfect (no blur/shimmer) AND
-		 *       ultrawide. Pair with Display Type = Fit, Pixel Size = 4 in-game.
+		 *   'fill' (default) — Start from the game's NATIVE resolution and only widen the
+		 *       field of view HORIZONTALLY, and only when your screen is actually wider than
+		 *       native (i.e. when vanilla would show pillarbox bars on the left/right). The
+		 *       native vertical view is always preserved, and screens at or below the native
+		 *       aspect render exactly native — so the mod never invents an ultrawide image
+		 *       where there is no empty space to fill. Pair with Display Type = Fit in-game.
+		 *       e.g. 3440x1440 (21:9) -> internal 764x320;  1920x1080 (16:9) -> ~native.
+		 *
+		 *   'auto-integer' — Pick the largest INTEGER scale of your monitor height (pixel-
+		 *       perfect, no blur) and fill BOTH axes. This also adds vertical view, so it can
+		 *       zoom out a little even on non-ultrawide screens. Pair with Pixel Size = 4.
 		 *       e.g. 3440x1440 -> scale 4 -> internal 860x360 -> exactly 4x to fill.
 		 *
-		 *   'aspect' — Keep the game's native 320px vertical view and only widen
-		 *       horizontally to match your monitor aspect. The scale will usually be
-		 *       fractional (e.g. 4.5x), so use Display Type = Fit (slightly softer).
-		 *       e.g. 3440x1440 -> internal 764x320.
+		 *   'aspect' — Alias of 'fill' (kept for back-compat).
 		 *
 		 *   'manual' — Use manualWidth / manualHeight exactly.
 		 */
-		mode: 'auto-integer',
+		mode: 'fill',
 
 		// CrossCode's native logical resolution. Don't change these.
 		nativeWidth: 568,
@@ -83,6 +88,7 @@
 
 	function compute() {
 		const { w: sw, h: sh } = detectScreen();
+		const nativeAspect = CONFIG.nativeWidth / CONFIG.nativeHeight;
 		let width, height;
 
 		switch (CONFIG.mode) {
@@ -91,16 +97,26 @@
 				height = CONFIG.manualHeight;
 				break;
 
-			case 'aspect':
-				height = CONFIG.nativeHeight;
-				width = even(height * (sw / sh));
-				break;
-
-			case 'auto-integer':
-			default: {
+			case 'auto-integer': {
 				const scale = Math.max(1, Math.round(sh / CONFIG.targetInternalHeight));
 				height = even(sh / scale);
 				width = even(sw / scale);
+				break;
+			}
+
+			case 'fill':
+			case 'aspect':
+			default: {
+				// Start from native and ONLY widen horizontally, and only when the screen is
+				// genuinely wider than native. If the screen is the native aspect or taller/
+				// narrower, vanilla already fills it (or letterboxes top/bottom), so widening
+				// would just invent an ultrawide image with no empty side space to fill. The
+				// native vertical FOV is always preserved.
+				height = CONFIG.nativeHeight;
+				const screenAspect = sw / sh;
+				width = screenAspect > nativeAspect
+					? even(height * screenAspect)
+					: CONFIG.nativeWidth;
 				break;
 			}
 		}

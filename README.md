@@ -13,11 +13,16 @@ of view** — you see more of the game world — instead of a stretched 16:9 ima
 2. Put this mod's folder at `CrossCode/assets/mods/cc-ultrawide/`
    (or run `install.ps1` — see [Installing](#installing)).
 3. Launch CrossCode.
-4. In **Options → Video**: set **Display Type = Fit** and **Pixel Size = 4**.
+4. In **Options → Video**: set **Display Type = Fit**. The mod keeps the native vertical view and
+   widens horizontally only as far as your screen actually is — so a 16:9 display looks native and a
+   21:9 display gains the extra side view. (For pixel-perfect integer scaling, switch
+   `CONFIG.mode = 'auto-integer'` and use **Pixel Size = 4** — see
+   [How the internal resolution is chosen](#how-the-internal-resolution-is-chosen).)
 5. Recommended Steam launch option (prevents Windows DPI from softening the image):
    `--force-device-scale-factor=1`
 
-You should now have a sharp, wider view that fills your ultrawide monitor.
+You should now have a wider view that fills the empty space on the sides of your monitor — without
+distorting or zooming the image on screens that are already native aspect.
 
 > **One-click install:** this mod is part of the [**cc-mods**](https://github.com/cc-mods) suite.
 > On the [**cc-ios**](https://github.com/cc-mods/cc-ios) iPhone wrapper it shows up in the in-game
@@ -110,18 +115,39 @@ A minimal `ccmod.json` wires them up:
 
 ---
 
-## Integer scaling — and the math for 3440×1440
+## How the internal resolution is chosen
 
-"Integer scaling" means the small internal image is multiplied by a **whole number** to fill
-the screen. If the multiplier is fractional, pixels don't line up 1:1 and you get blur /
-shimmer; whole-number scaling stays perfectly sharp. (Good explainer:
-<https://tanalin.com/en/articles/lossless-scaling/>.)
+The default is **`fill`**: start at the native resolution and **only widen the field of view
+horizontally, and only when your screen is wider than native** (16:9 ≈ `568/320 = 1.775`). If the
+screen is the native aspect or *taller/narrower*, the mod leaves the resolution at native — it never
+invents an ultrawide image when there is no empty space on the sides to fill. The native vertical
+view is always preserved.
 
-This mod has two strategies (set `CONFIG.mode` in `postload.js`):
+```
+nativeAspect = 568 / 320 ≈ 1.775
+screenAspect = screenWidth / screenHeight
+height = 320                                  (always native vertical view)
+width  = screenAspect > nativeAspect          (screen is wider than native?)
+           ? round(320 × screenAspect)         → widen to fill the side space
+           : 568                                → not wider → stay exactly native
+```
 
-### `auto-integer` (default) — sharp + ultrawide
+| Screen | screenAspect | Result | Why |
+|--------|-------------:|--------|-----|
+| 3440×1440 (21:9) | 2.389 | **764 × 320** | wider than native → widen to fill the sides |
+| 2560×1080 (21:9) | 2.370 | **758 × 320** | wider than native → widen |
+| 1920×1080 (16:9) | 1.778 | **~568 × 320** | ≈ native, already fills → no ultrawide |
+| 1920×1200 (16:10) | 1.600 | **568 × 320** | narrower than native → stay native |
+| portrait / 4:3 | < 1.775 | **568 × 320** | no side space → stay native (never ultrawide) |
 
-Pick the largest integer scale that fills the monitor height:
+In-game choose **Display Type = Fit** so the image scales to fill without distortion.
+
+### Optional: `auto-integer` (pixel-perfect, fills both axes)
+
+"Integer scaling" means the small internal image is multiplied by a **whole number** to fill the
+screen, so pixels line up 1:1 (no blur/shimmer — good explainer:
+<https://tanalin.com/en/articles/lossless-scaling/>). Set `CONFIG.mode = 'auto-integer'` to pick the
+largest integer scale of your monitor height and fill **both** axes:
 
 ```
 scale  = round(screenHeight / 340)
@@ -129,30 +155,10 @@ height = screenHeight / scale
 width  = screenWidth  / scale
 ```
 
-For **3440×1440**:
-
-```
-scale  = round(1440 / 340) = 4
-height = 1440 / 4 = 360
-width  = 3440 / 4 = 860     →  internal 860 × 360
-```
-
-`860 × 360` scaled exactly **4×** = `3440 × 1440`: fills the whole monitor, pixel-perfect,
-ultrawide, and as a bonus gives ~12.5% more *vertical* view too (360 vs 320). In-game choose
-**Display Type = Fit**, **Pixel Size = 4** for a clean 1:1 mapping.
-
-### `aspect` — keep native vertical view
-
-Keep the native 320px height, widen horizontally only:
-
-```
-height = 320
-width  = round(320 × 3440 / 1440) = 764   →  internal 764 × 320
-```
-
-This preserves the exact vanilla vertical zoom but scales at ~4.5× (fractional), so use
-**Display Type = Fit** (slightly softer). Use this if you specifically want the original
-vertical framing.
+For **3440×1440**: `scale = 4 → 860 × 360`, scaled exactly **4×** to fill, pixel-perfect, with ~12.5%
+more *vertical* view too. The trade-off: because it derives from the screen, it also adds vertical
+FOV (a slight zoom-out) even on non-ultrawide screens — which is why it is **no longer the default**.
+Pair it with **Display Type = Fit**, **Pixel Size = 4**.
 
 ---
 
@@ -162,7 +168,7 @@ Open `postload.js` and edit the `CONFIG` object:
 
 | Key                    | Default          | Meaning |
 |------------------------|------------------|---------|
-| `mode`                 | `'auto-integer'` | `'auto-integer'`, `'aspect'`, or `'manual'`. |
+| `mode`                 | `'fill'`         | `'fill'` (native + widen only if the screen is wider), `'auto-integer'`, `'aspect'` (alias of fill), or `'manual'`. |
 | `targetInternalHeight` | `340`            | auto-integer aims for an internal height near this. |
 | `manualWidth/Height`   | `860 / 360`      | used when `mode: 'manual'`. |
 | `screenWidth/Height`   | `0` (auto)       | override detection if DPI reports a wrong size. |
