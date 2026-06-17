@@ -11,7 +11,7 @@ of view** — you see more of the game world — instead of a stretched 16:9 ima
 
 1. Install [CCLoader](https://github.com/CCDirectLink/CCLoader) (you already have it).
 2. Put this mod's folder at `CrossCode/assets/mods/cc-ultrawide/`
-   (or run `install.ps1` — see [Installing](#installing)).
+   (or junction it for live dev — see [Installing](#installing)).
 3. Launch CrossCode.
 4. In **Options → Video**: set **Display Type = Fit**. The mod keeps the native vertical view and
    widens horizontally only as far as your screen actually is — so a 16:9 display looks native and a
@@ -252,15 +252,16 @@ The mod folder must live in `CrossCode/assets/mods/`.
 
 **Option A — copy:** copy this folder into `…/CrossCode/assets/mods/cc-ultrawide/`.
 
-**Option B — symlink (keeps it in sync with this repo):** from an *admin* PowerShell, run:
+**Option B — junction (keeps it in sync with this repo, for local dev):** from PowerShell, run the
+suite installer (it reads this mod's id from `ccmod.json`):
 
 ```powershell
-./install.ps1
+cc-agent-tools\scripts\windows\install-mod.ps1 -ModPath .
 ```
 
-`install.ps1` creates a directory junction from the game's mods folder to this repo so you
-can edit here and just relaunch the game. Pass `-GamePath` if CrossCode isn't at the default
-Steam location, and `-Uninstall` to remove the link.
+It creates a directory junction from the game's mods folder to this repo so you can edit here and
+just relaunch the game. Pass `-GamePath` if CrossCode isn't at the default Steam location, and
+`-Uninstall` to remove the link.
 
 ---
 
@@ -310,4 +311,4 @@ The bump commit is authored by `github-actions[bot]`; GitHub's default `GITHUB_T
 re-trigger workflows, so the bot's own commit cannot start an infinite loop. A second-line `if:`
 guard in the workflow rejects it anyway. Each release ships only the runtime + docs
 (`ccmod.json`, `package.json`, `postload.js`, `prestart.js`, `icon.png`, `README.md`, `LICENSE`) —
-dev-only files like `install.ps1` and `.github/` are intentionally excluded from the `.ccmod`.
+dev-only files like `.github/` are intentionally excluded from the `.ccmod`.
