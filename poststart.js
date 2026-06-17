@@ -56,7 +56,7 @@
 								step: 5,
 								fill: true,
 								name: "Ultrawide Width",
-								description: "How wide the ultrawide view renders. 100% = full width; lower narrows it toward 16:9 (centred), to clear a notch / Dynamic Island. Red bars preview the width; restart the game to apply.",
+								description: "Width %. Lower clears a notch. Restart.",
 								customNumberDisplay: function (index) {
 									// index -> percentage for the 0..100 step-5 slider.
 									var pct = 0;
