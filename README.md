@@ -88,18 +88,21 @@ preload   ── runs BEFORE the game's <head> scripts  → IG_WIDTH not set yet
             ↓ game <head> runs: IG_WIDTH = 568, game.compiled.js defines startCrossCode
 postload  ── runs AFTER head scripts, BEFORE ig.main()  ← we override IG_WIDTH HERE ✅
             ↓ ig.main(... IG_WIDTH ...) starts the game with our resolution
-prestart  ── after game classes are defined  ← we patch the GUI layout + add the Video option ✅
-main / poststart ── after the game has started (too late to change FOV)
+prestart  ── after game classes are defined  ← we patch the GUI fixes + the width preview ✅
+poststart ── after the game has started       ← we register the CCModManager setting ✅
+            (too late to change FOV — that's why the width applies on the next restart)
 ```
 
 So this mod ships:
 
-- `postload.js` — overwrites `window.IG_WIDTH` / `window.IG_HEIGHT` (the ultrawide FOV trick).
+- `postload.js` — overwrites `window.IG_WIDTH` / `window.IG_HEIGHT` (the ultrawide FOV trick), reading
+  the chosen **Ultrawide Width** % from `localStorage` at startup.
 - `prestart.js` — applies two resolution-correctness fixes (the environmental edge-tint overlay
   height and title-screen parallax centering — see
-  [Resolution-correctness fixes](#resolution-correctness-fixes)) and adds an
-  **Ultrawide Width Shrink** option to the Video menu (see
-  [Ultrawide Width Shrink](#options--video--ultrawide-width-shrink-notch--bezel-safety)).
+  [Resolution-correctness fixes](#resolution-correctness-fixes)) and draws the live **width preview
+  bars** while you adjust the setting.
+- `poststart.js` — registers the **Ultrawide Width** slider on the mod's **CCModManager “Mod settings”**
+  page (see [Ultrawide Width](#ultrawide-width-mod-settings--notch--dynamic-island)).
 
 A minimal `ccmod.json` wires them up:
 
@@ -109,6 +112,7 @@ A minimal `ccmod.json` wires them up:
   "version": "1.0.0",
   "postload": "postload.js",
   "prestart": "prestart.js",
+  "poststart": "poststart.js",
   "dependencies": { "crosscode": "^1.1.0 || 1.0.2" }
 }
 ```
@@ -179,28 +183,33 @@ The chosen values are logged to the dev console (`F12`) and exposed on
 
 ---
 
-## Options → Video → "Ultrawide Width Shrink" (notch / bezel safety)
+## Ultrawide Width (Mod settings — notch / Dynamic Island)
 
-Some displays crop the rendered image — most commonly an **iPhone's camera "island"** when
-mirroring CrossCode to one over AirPlay or similar. The notch leaves a black zone the game would
-otherwise try to draw HUD into. This slider pulls **menu buttons and HUD elements** (health,
-etc.) inward from the screen edges, leaving symmetric empty space on the left and right where
-the notch / bezel sits. The **game world / FOV is unchanged**.
+How wide the ultrawide view renders is a single setting on the mod's **CCModManager “Mod settings”**
+page — **not** in the native game Options menu. To open it: **Options → Mods**, focus **CrossCode
+Ultrawide** in the list, then **right-click** (mouse) or press **R2** (controller) to open its
+**Mod settings**; the **Ultrawide Width** slider is under **Display**.
 
 | Slider | Result |
 |--------|--------|
-| **0** (default) | No shrink — UI sits at the screen edges (vanilla). |
-| **10–20**       | Small symmetric inset — usually enough to clear an iPhone camera notch. |
-| **50**          | Halfway between vanilla and native 16:9 layout. |
-| **100**         | The whole UI lays out at native 568 width, centred. |
+| **100%** (default) | Full screen-filling ultrawide width (max field of view). |
+| **lower** | Narrower field of view, centred, with symmetric letterbox bars on the left/right — so the render can clear a notch / **iPhone Dynamic Island**. |
+| **0%** | Native 16:9 width (no ultrawide). |
 
-**How it works:** `prestart.js` patches the top-level GUI layout pass
-(`ig.Gui#_updateRecursive`) to lay everything out inside a centred narrower box whose width is
-linearly interpolated between the full screen (0) and native 568 (100). Right-anchored elements
-follow the new right edge inward, left-anchored ones follow the new left edge inward, and
-centred elements stay in the absolute screen centre. Full-bleed elements (screen-fade overlays,
-full-screen background art) are left covering the entire screen so shrinking only affects
-edge-anchored UI. **Changes take effect live** — drag the slider and the HUD moves immediately.
+**It applies on the next game restart.** CrossCode fixes its logical resolution at boot (there is no
+safe live-resize path), so the chosen width is persisted to `localStorage` and read by `postload.js` on
+the next launch. To avoid restarting repeatedly just to find the right value, **dragging the slider
+flashes two red preview bars** showing where the render edges would be at that width; pick the value
+that clears your notch, then **restart** (on cc-ios, the in-game **Restart** title button) to apply.
+
+The preview bars are drawn in the engine's render layer (above the menu) and only show a *narrower*
+future width — the shrink-to-clear-a-notch case. The native **FPS counter** (from
+[cc-iosux](https://github.com/cc-mods/cc-iosux)) stays anchored to the real canvas edge: it doesn't
+move while you preview, and repositions to the new edge once the width actually changes on restart.
+
+> Requires **CCModManager** (it hosts the settings page) — always present on cc-ios, and the standard
+> manager on desktop. Without it the width still works (defaults to 100% or the last saved value); it
+> just has no settings UI.
 
 ---
 

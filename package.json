@@ -5,6 +5,10 @@
 	"description": "Renders CrossCode at an ultrawide aspect ratio by widening the internal render viewport (genuinely wider field of view, with pixel-perfect integer scaling). Works on desktop and the cc-ios iOS wrapper.",
 	"postload": "postload.js",
 	"prestart": "prestart.js",
+	"poststart": "poststart.js",
+	"scripts": {
+		"test": "node test/ultrawide.test.js"
+	},
 	"ccmodDependencies": {
 		"crosscode": "^1.1.0 || 1.0.2"
 	}

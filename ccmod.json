@@ -18,5 +18,6 @@
 		"crosscode": "^1.1.0 || 1.0.2"
 	},
 	"postload": "postload.js",
-	"prestart": "prestart.js"
+	"prestart": "prestart.js",
+	"poststart": "poststart.js"
 }

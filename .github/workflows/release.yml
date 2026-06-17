@@ -106,7 +106,7 @@ jobs:
           STAGE="$(mktemp -d)"
           # Ship only the runtime + docs. Exclude dev-only files (install.ps1,
           # .github/, .git/, .gitignore, packaged archives).
-          cp ccmod.json package.json postload.js prestart.js icon.png README.md LICENSE "$STAGE/"
+          cp ccmod.json package.json postload.js prestart.js poststart.js icon.png README.md LICENSE "$STAGE/"
           ASSET="cc-ultrawide-${NEW_VERSION}.ccmod"
           ( cd "$STAGE" && zip -r "${GITHUB_WORKSPACE}/${ASSET}" . )
           ls -la "${GITHUB_WORKSPACE}/${ASSET}"

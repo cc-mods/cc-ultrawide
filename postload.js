@@ -145,9 +145,34 @@
 		return { width, height };
 	}
 
+	// Read the persisted "Ultrawide Width" percentage (0..100) the CCModManager mod-settings slider
+	// writes to localStorage (key "cc-ultrawide-width" = "<modId>-<key>"). 100 = full/max ultrawide
+	// width (default), lower narrows the field of view toward native. We read it here (not from
+	// modmanager.options, which doesn't exist yet at postload) because the logical resolution must be
+	// set before ig.main(). Absent key (first launch, before poststart registers it) => default 100.
+	function readWidthPct() {
+		try {
+			const ls = window.localStorage;
+			const raw = ls ? ls.getItem('cc-ultrawide-width') : null;
+			if (raw == null) return 100;
+			const n = Number(raw);
+			if (!isFinite(n)) return 100;
+			return n < 0 ? 0 : (n > 100 ? 100 : n);
+		} catch (_) {
+			return 100;
+		}
+	}
+
 	try {
 		const viewport = detectViewport();
-		const { width, height } = compute();
+		const { width: maxWidth, height } = compute();
+
+		// Apply the user's width percentage: 100% = the full auto-detected ultrawide width (max),
+		// 0% = native. Interpolate linearly between native and max, keep it even, never below native.
+		const pct = readWidthPct();
+		let width = even(CONFIG.nativeWidth + (maxWidth - CONFIG.nativeWidth) * (pct / 100));
+		if (width < CONFIG.nativeWidth) width = CONFIG.nativeWidth;
+		if (width > maxWidth) width = maxWidth;
 
 		window.IG_WIDTH = width;
 		window.IG_HEIGHT = height;
@@ -156,6 +181,8 @@
 		window.CC_ULTRAWIDE = Object.assign(window.CC_ULTRAWIDE || {}, {
 			width,
 			height,
+			maxWidth,
+			widthPct: pct,
 			viewport,
 			screen: viewport,
 			mode: CONFIG.mode,
@@ -165,7 +192,7 @@
 
 		console.log(
 			`${TAG} internal resolution -> ${width}x${height} ` +
-			`(native ${CONFIG.nativeWidth}x${CONFIG.nativeHeight}) ` +
+			`(native ${CONFIG.nativeWidth}x${CONFIG.nativeHeight}, max ${maxWidth}, width ${pct}%) ` +
 			`for window ${viewport.w}x${viewport.h}, mode='${CONFIG.mode}'.`,
 		);
 	} catch (err) {
