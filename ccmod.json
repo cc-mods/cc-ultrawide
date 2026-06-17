@@ -1,6 +1,6 @@
 {
 	"id": "cc-ultrawide",
-	"version": "1.0.10",
+	"version": "1.0.11",
 	"title": "CrossCode Ultrawide",
 	"description": "Renders CrossCode at an ultrawide aspect ratio by widening the internal render viewport. This gives a genuinely wider field of view (you see more of the world) instead of a stretched image, and supports pixel-perfect integer scaling. Works on desktop and the cc-ios iOS wrapper.",
 	"repository": "https://github.com/cc-mods/cc-ultrawide",
