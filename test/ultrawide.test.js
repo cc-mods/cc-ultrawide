@@ -87,6 +87,17 @@ function loadPrestart() {
 	const geo = ccuw._previewGeometry;
 	ok('prestart: exposes _previewGeometry()', typeof geo === 'function');
 
+	// applied-pct + restart-needed decision (drives the "leave menu -> offer restart" prompt).
+	ok('prestart: exposes _appliedPct()/_restartNeeded()',
+		typeof ccuw._appliedPct === 'function' && typeof ccuw._restartNeeded === 'function');
+	ok('prestart: _appliedPct defaults to 100 (no boot width)', ccuw._appliedPct() === 100);
+	ok('prestart: _restartNeeded false at the default', ccuw._restartNeeded(100) === false);
+	ccuw.widthPct = 70; // pretend postload applied 70% at boot
+	ok('prestart: _appliedPct reflects the applied width', ccuw._appliedPct() === 70);
+	ok('prestart: _restartNeeded false when unchanged', ccuw._restartNeeded(70) === false);
+	ok('prestart: _restartNeeded true when moved away', ccuw._restartNeeded(55) === true);
+	ccuw.widthPct = undefined; // reset for any later assertions
+
 	// From a full-width canvas (sw=max=640, native=568): 100% -> no inset; 0% -> inset to native.
 	ok('geo 100% full canvas: no inset', geo(100, 640, 640, 568).off === 0 && geo(100, 640, 640, 568).futureW === 640);
 	const g0 = geo(0, 640, 640, 568);
@@ -119,8 +130,14 @@ function loadPoststart(opts) {
 	const { registered } = loadPoststart();
 	ok('poststart: registers with CCModManager', !!registered);
 	ok('poststart: modId + title', registered && registered.info.modId === 'cc-ultrawide');
+	// The localStorage id CCModManager derives is `${modId}-${OPTION KEY}` (NOT the header key), so the
+	// option key MUST be "width" to match postload/preview's "cc-ultrawide-width". Guard both keys.
+	ok('poststart: header key is "general"',
+		registered && Object.keys(registered.schema.display.headers)[0] === 'general');
+	ok('poststart: option key is "width" (=> id cc-ultrawide-width)',
+		registered && Object.keys(registered.schema.display.headers.general)[0] === 'width');
 	const opt = registered && registered.schema.display &&
-		registered.schema.display.headers.width.ultrawideWidth;
+		registered.schema.display.headers.general.width;
 	ok('poststart: registers an OBJECT_SLIDER', !!opt && opt.type === 'OBJECT_SLIDER');
 	ok('poststart: default 100, range 0..100 step 5', opt && opt.init === 100 && opt.min === 0 && opt.max === 100 && opt.step === 5);
 	ok('poststart: has name + description', opt && /Ultrawide Width/.test(opt.name) && typeof opt.description === 'string');
@@ -129,7 +146,7 @@ function loadPoststart(opts) {
 
 	// changeEvent reads the persisted % and flashes the preview.
 	const r2 = loadPoststart({ ls: { 'cc-ultrawide-width': '70' } });
-	const opt2 = r2.registered.schema.display.headers.width.ultrawideWidth;
+	const opt2 = r2.registered.schema.display.headers.general.width;
 	opt2.changeEvent.call(opt2);
 	ok('poststart: changeEvent flashes preview with persisted %', r2.previewCalls.length === 1 && r2.previewCalls[0] === 70);
 

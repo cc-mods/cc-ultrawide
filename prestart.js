@@ -27,9 +27,15 @@
  *        poststart.js calls window.CC_ULTRAWIDE.previewWidthPct(pct) and we flash
  *        two red vertical bars showing where the render edges WOULD be at that width
  *        (a centred, narrower box), so you can pick a value that clears a notch /
- *        Dynamic Island, then restart to apply. The bars draw on top of the menu
- *        (zIndex above the menu layer) and fade out shortly after you stop dragging.
- *        They are purely visual and never change the actual render.
+ *        Dynamic Island. The bars draw on top of the menu (zIndex above the menu
+ *        layer), auto-hide shortly after you stop dragging, and disappear the moment
+ *        you leave the settings menu — at which point, if you changed the width, we
+ *        offer to restart so it applies. They are purely visual and never change the
+ *        actual render.
+ *
+ *        CROSS-PLATFORM: the bars, the menu-exit detection (sc.menu.menuStack) and the
+ *        restart prompt (sc.Dialogs) are all pure CrossCode ENGINE APIs — no native /
+ *        Swift code — so this works the same on the Mac, Windows and cc-ios builds.
  *
  *        NOTE: the bars are drawn in the engine's render layer, which only spans the
  *        live canvas (the current render). They show a NARROWER future width (edges
@@ -141,8 +147,95 @@
 	const BAR_COLOR = '#ff3b30';    // red
 	const BAR_W = 3;                // logical px per bar
 
+	// Preview state. The bars are pure ENGINE gui elements (ig.ColorGui) — NOT a native/Swift overlay —
+	// so the preview behaves identically on Mac, Windows and the cc-ios iPhone build.
 	let _overlay = null;
-	let _hideTimer = null;
+	let _shown = false;             // are the bars currently visible?
+	let _hideAt = 0;                // Date.now() after which the bars auto-hide (while still in the menu)
+	let _wasInModOptions = false;   // was CCModManager's mod-settings submenu on top last frame?
+	let _pendingRestart = false;    // has the width been moved away from the value applied at boot?
+	let _promptOpen = false;        // is our restart dialog currently up? (don't stack prompts)
+
+	// The width percentage actually applied at boot (postload sets ccuw.widthPct). Used to decide
+	// whether a restart is genuinely needed when the player leaves the settings menu.
+	function appliedPct() {
+		const p = ccuw.widthPct;
+		return clampPct(p == null ? 100 : p);
+	}
+
+	// Show / hide the two bars by SIZE, not alpha: the renderer composites each element with its
+	// animated currentState.alpha, so a raw hook.alpha=0 does NOT reliably hide a ColorGui — whereas a
+	// zero-size rectangle draws nothing. Bullet-proof and engine-only (cross-platform).
+	function showBars() {
+		if (!_overlay) return;
+		const sh = ig.system.height | 0;
+		_overlay.leftBar.setSize(BAR_W, sh);
+		_overlay.rightBar.setSize(BAR_W, sh);
+		_shown = true;
+	}
+	function hideBars() {
+		_shown = false;
+		if (!_overlay) return;
+		try {
+			_overlay.leftBar.setSize(0, 0);
+			_overlay.rightBar.setSize(0, 0);
+		} catch (_) { /* ignore */ }
+	}
+
+	// Is CCModManager's per-mod "Mod settings" submenu currently on top of the menu stack?
+	// (sc.MENU_SUBMENU.MOD_OPTIONS is registered by CCModManager; absent on setups without it.)
+	function inModOptions() {
+		try {
+			if (window.sc && sc.MENU_SUBMENU && sc.MENU_SUBMENU.MOD_OPTIONS != null &&
+				sc.menu && sc.menu.menuStack && typeof sc.menu.menuStack.last === 'function') {
+				return sc.menu.menuStack.last() === sc.MENU_SUBMENU.MOD_OPTIONS;
+			}
+		} catch (_) { /* ignore */ }
+		return false;
+	}
+
+	// Reload to apply a new width. CrossCode fixes its logical resolution once at boot, so a width
+	// change only takes effect on restart. On NW.js (Mac/Windows) chrome.runtime.reload() restarts the
+	// app; in the cc-ios WKWebView (no chrome.runtime) window.location.reload() reloads the game. Both
+	// are cross-platform-safe — no native bridge required.
+	function doReload() {
+		try {
+			if (window.chrome && window.chrome.runtime && typeof window.chrome.runtime.reload === 'function') {
+				window.chrome.runtime.reload();
+				return;
+			}
+		} catch (_) { /* fall through to a plain reload */ }
+		try { window.location.reload(); } catch (_) { /* nothing else to try */ }
+	}
+
+	// Offer to restart now to apply the new width, using the base-game yes/no dialog (the same one
+	// CrossCode uses for load/overwrite confirms). button.data === 0 is "Yes".
+	function promptRestart() {
+		if (_promptOpen) return;
+		if (!(window.sc && sc.Dialogs && typeof sc.Dialogs.showYesNoDialog === 'function')) {
+			_pendingRestart = false;
+			return;
+		}
+		_promptOpen = true;
+		try {
+			const icon = (sc.DIALOG_INFO_ICON && sc.DIALOG_INFO_ICON.QUESTION) || null;
+			sc.Dialogs.showYesNoDialog(
+				'Ultrawide width changed. Restart the game now to apply it?',
+				icon,
+				function (button) {
+					_promptOpen = false;
+					_pendingRestart = false;
+					try { if (button && button.data === 0) doReload(); } catch (_) { /* ignore */ }
+				},
+			);
+		} catch (e) {
+			_promptOpen = false;
+			if (!ccuw._restartPromptWarned) {
+				ccuw._restartPromptWarned = true;
+				console.error(`${TAG} restart prompt failed (non-fatal):`, e);
+			}
+		}
+	}
 
 	// Pure geometry for the preview bars: for a width `pct` (0..100), given the current canvas width
 	// `sw`, the max ultrawide width `maxW`, and the native width `nativeW`, return the future render
@@ -175,15 +268,34 @@
 					this.parent();
 					this.setSize(ig.system.width, ig.system.height);
 					this.setAlign(ig.GUI_ALIGN.X_LEFT, ig.GUI_ALIGN.Y_TOP);
-					this.hook.zIndex = 9999;     // above the menu layer (game tops out ~1201)
-					this.hook.pauseGui = true;   // keep drawing while a menu pauses the game
-					this.leftBar = new ig.ColorGui(BAR_COLOR, BAR_W, ig.system.height);
-					this.rightBar = new ig.ColorGui(BAR_COLOR, BAR_W, ig.system.height);
+					this.hook.zIndex = 9999;          // above the menu layer (game tops out ~1201)
+					this.hook.pauseGui = true;        // keep drawing while a menu pauses the game
+					this.hook.invisibleUpdate = true; // keep update() running every frame so we can
+					                                  // auto-hide and detect leaving the settings menu
+					// Bars start at zero size = hidden (see showBars/hideBars for why size, not alpha).
+					this.leftBar = new ig.ColorGui(BAR_COLOR, 0, 0);
+					this.rightBar = new ig.ColorGui(BAR_COLOR, 0, 0);
 					for (const bar of [this.leftBar, this.rightBar]) {
 						bar.setAlign(ig.GUI_ALIGN.X_LEFT, ig.GUI_ALIGN.Y_TOP);
-						bar.hook.alpha = 0;       // start hidden
 						this.addChildGui(bar);
 					}
+				},
+				// Driven every frame by ig.gui. Owns the two "disappear" rules the player asked for:
+				//   1. auto-hide a moment after the last slider move (so they only flash briefly), and
+				//   2. hide the instant they leave the mod-settings menu — and, if the width was changed,
+				//      offer to restart so the new width actually applies.
+				update() {
+					this.parent();
+					try {
+						if (_shown && _hideAt && Date.now() >= _hideAt) hideBars();
+						const inMod = inModOptions();
+						if (_wasInModOptions && !inMod) {
+							if (_shown) hideBars();
+							if (_pendingRestart) promptRestart();
+						}
+						if (inMod) _promptOpen = false; // reset the guard whenever we're back in the menu
+						_wasInModOptions = inMod;
+					} catch (_) { /* never let the preview break the frame loop */ }
 				},
 			});
 			_overlay = new Overlay();
@@ -196,9 +308,10 @@
 		}
 	}
 
-	// Position + show the bars for the given width percentage (0..100), then schedule a fade-out.
-	// Bars are placed at the edges of the centred box the future width would occupy WITHIN the current
-	// render (so a narrower width shows the bars moving inward). Purely visual.
+	// Position + show the bars for the given width percentage (0..100). The bars are placed at the
+	// edges of the centred box the future width would occupy WITHIN the current render (so a narrower
+	// width shows the bars moving inward). update() auto-hides them shortly after the last call and
+	// the moment the player leaves the settings menu. Purely visual.
 	function flashPreview(pct) {
 		const ov = ensureOverlay();
 		if (!ov) return;
@@ -212,22 +325,17 @@
 			const off = geo.off;
 
 			ov.setSize(sw, sh);
-			ov.leftBar.setSize(BAR_W, sh);
-			ov.rightBar.setSize(BAR_W, sh);
+			showBars();
 			ov.leftBar.hook.pos.x = off;
 			ov.leftBar.hook.pos.y = 0;
 			ov.rightBar.hook.pos.x = Math.max(off, sw - off - BAR_W);
 			ov.rightBar.hook.pos.y = 0;
-			ov.leftBar.hook.alpha = 1;
-			ov.rightBar.hook.alpha = 1;
 
-			if (_hideTimer) { clearTimeout(_hideTimer); _hideTimer = null; }
-			_hideTimer = setTimeout(() => {
-				_hideTimer = null;
-				try {
-					if (_overlay) { _overlay.leftBar.hook.alpha = 0; _overlay.rightBar.hook.alpha = 0; }
-				} catch (_) { /* ignore */ }
-			}, PREVIEW_HOLD_MS);
+			// Auto-hide a short moment after the last move (update() enforces this), and remember
+			// whether the chosen width differs from the one applied at boot — so leaving the menu only
+			// offers a restart when something actually changed.
+			_hideAt = Date.now() + PREVIEW_HOLD_MS;
+			_pendingRestart = clampPct(pct) !== appliedPct();
 		} catch (e) {
 			if (!ccuw._previewWarned) {
 				ccuw._previewWarned = true;
@@ -238,8 +346,11 @@
 
 	// Public API used by poststart.js (safe no-op until ig.gui exists / if the overlay can't build).
 	ccuw.previewWidthPct = flashPreview;
-	// Pure geometry helper, exposed for unit tests.
+	// Pure helpers exposed for unit tests.
 	ccuw._previewGeometry = previewGeometry;
+	ccuw._appliedPct = appliedPct;
+	// Would changing the width to `pct` require a restart (i.e. differ from the applied value)?
+	ccuw._restartNeeded = (pct) => clampPct(pct) !== appliedPct();
 
 	// Install the two render fixes now, retrying briefly if a dependency isn't ready yet. (The preview
 	// overlay is created lazily on first use, so it isn't part of this readiness loop.)

@@ -35,14 +35,20 @@
 		// the VALUE (entries[index]) — so localStorage "cc-ultrawide-width" holds the percentage directly.
 		// customNumberDisplay shows that percentage on the thumb. changeEvent fires on every change with
 		// `this` = the option; we read the new value and flash the preview bars.
+		//
+		// IMPORTANT — the localStorage id is "<modId>-<OPTION KEY>" (NOT the header key): CCModManager
+		// derives it as `${settings.modId}-${optKey}`. So the option key MUST be "width" to land on
+		// "cc-ultrawide-width" — the exact key postload.js reads at boot and changeEvent reads below.
+		// (An earlier key of "ultrawideWidth" stored under "cc-ultrawide-ultrawideWidth", so the slider
+		// never moved the value postload/preview actually read — the preview bars looked "stuck".)
 		mm.registerAndGetModOptions(
 			{ modId: "cc-ultrawide", title: "CrossCode Ultrawide" },
 			{
 				display: {
 					settings: { tabIcon: "general", title: "Display" },
 					headers: {
-						width: {
-							ultrawideWidth: {
+						general: {
+							width: {
 								type: "OBJECT_SLIDER",
 								init: 100,
 								min: 0,
