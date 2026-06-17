@@ -3,7 +3,7 @@
 // Surfaces the mod's one user setting — "Ultrawide Width" — on the CCModManager
 // "Mod settings" page (Mods list → focus this mod → right-click / controller R2),
 // NOT in the native game Options menu. (Suite convention: a mod's settings live on
-// its CCModManager page; see cc-mods/cc-agentdocs › crosscode-modding.md.)
+// its CCModManager page; see cc-mods/cc-agent-tools › crosscode-modding.md.)
 //
 // HOW THE WIDTH APPLIES
 //   The slider is an OBJECT_SLIDER (0–100%, default 100%). CCModManager persists the
