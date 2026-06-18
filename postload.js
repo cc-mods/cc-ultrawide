@@ -75,20 +75,43 @@
 		maxAspect: 0,
 	};
 
-	// What drawable area should we fill? Prefer the actual game WINDOW (innerWidth/innerHeight)
-	// over the MONITOR (screen.width/height). Reading the monitor is wrong when the game runs in
-	// a window: on an ultrawide monitor a 16:9 game window would otherwise get an ultrawide FOV
-	// squished into it. innerWidth/innerHeight is the real canvas area the game fills, so the FOV
-	// matches what you actually see — native when windowed 16:9, ultrawide only when the window
-	// truly fills an ultrawide screen. A manual CONFIG override always wins; we fall back to the
-	// monitor, then a sane default.
+	// What drawable area should we fill? Usually the actual game WINDOW (innerWidth/innerHeight) is
+	// right: on an ultrawide monitor a *windowed* 16:9 game must NOT get an ultrawide FOV squished
+	// into it, and on cc-ios window.screen.* is wrong (portrait) while innerWidth is the true
+	// landscape viewport. So innerWidth is the default.
+	//
+	// THE EXCEPTION — desktop FULLSCREEN: NW.js starts the window at a small default size (~1134x628)
+	// and only switches to fullscreen AFTER this postload stage runs, but the logical resolution is
+	// locked here (before ig.main). So innerWidth would be the tiny pre-fullscreen window and the FOV
+	// would never reach the ultrawide monitor the game is about to fill. In that one case we read the
+	// MONITOR (window.screen.*) instead. The game persists its fullscreen choice to localStorage as
+	// "IG_FULLSCREEN" before postload, so it's readable here; cc-ios (a WKWebView, never NW.js
+	// fullscreen) is excluded so its innerWidth path is untouched. A manual CONFIG override still wins.
+	function isCCIos() {
+		return !!(window.webkit && window.webkit.messageHandlers &&
+			window.webkit.messageHandlers.cccontrol);
+	}
+	function wantsFullscreen() {
+		if (isCCIos()) return false;
+		try {
+			return !!(window.localStorage &&
+				window.localStorage.getItem('IG_FULLSCREEN') === 'true');
+		} catch (_) {
+			return false;
+		}
+	}
 	function detectViewport() {
+		const screenW = (window.screen && window.screen.width) || 0;
+		const screenH = (window.screen && window.screen.height) || 0;
+		const innerW = window.innerWidth > 0 ? window.innerWidth : 0;
+		const innerH = window.innerHeight > 0 ? window.innerHeight : 0;
+		// Desktop fullscreen → fill the monitor; otherwise → fill the window. Each still falls back
+		// to the other (then a sane default) if its primary source is unavailable.
+		const preferScreen = wantsFullscreen() && screenW > 0 && screenH > 0;
 		const w = CONFIG.screenWidth
-			|| (window.innerWidth > 0 ? window.innerWidth : 0)
-			|| (window.screen && window.screen.width) || 1920;
+			|| (preferScreen ? screenW : (innerW || screenW || 1920));
 		const h = CONFIG.screenHeight
-			|| (window.innerHeight > 0 ? window.innerHeight : 0)
-			|| (window.screen && window.screen.height) || 1080;
+			|| (preferScreen ? screenH : (innerH || screenH || 1080));
 		return { w, h };
 	}
 

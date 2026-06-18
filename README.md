@@ -146,6 +146,21 @@ width  = screenAspect > nativeAspect          (screen is wider than native?)
 
 In-game choose **Display Type = Fit** so the image scales to fill without distortion.
 
+### Which viewport it measures (fullscreen vs windowed)
+
+The "screen" above is whichever drawable area the game will actually fill:
+
+- **Desktop fullscreen** → the **monitor**. NW.js starts the window small and only goes fullscreen
+  *after* the mod runs, so the mod reads your fullscreen choice (`IG_FULLSCREEN` in localStorage) and
+  measures the monitor — otherwise it would see the tiny pre-fullscreen window and stay native.
+  **So on desktop, set the game to Fullscreen to get the ultrawide FOV.**
+- **Desktop windowed** → the **game window** (`innerWidth/innerHeight`), so an ultrawide image is
+  never squished into a 16:9 window; it widens only when the window itself is ultrawide.
+- **cc-ios (iPhone/iPad)** → always the WebView viewport (`innerWidth/innerHeight`), which is the true
+  landscape size — the wrapper is always full-screen.
+
+It is set **once at boot**; changing fullscreen/size takes effect on the next launch.
+
 ### Optional: `auto-integer` (pixel-perfect, fills both axes)
 
 "Integer scaling" means the small internal image is multiplied by a **whole number** to fill the

@@ -38,10 +38,13 @@ function postload(opts) {
 	const win = {
 		innerWidth: opts.innerWidth,
 		innerHeight: opts.innerHeight,
-		screen: { width: opts.innerWidth, height: opts.innerHeight },
+		screen: opts.screen || { width: opts.innerWidth, height: opts.innerHeight },
 		localStorage: fakeLocalStorage(opts.ls || {}),
 		CC_ULTRAWIDE: undefined,
 	};
+	if (opts.ccios) {
+		win.webkit = { messageHandlers: { cccontrol: { postMessage() {} } } };
+	}
 	runFile('postload.js', { console: { log() {}, warn() {}, error() {} }, window: win });
 	return win;
 }
@@ -65,6 +68,44 @@ function postload(opts) {
 		postload({ innerWidth: 1200, innerHeight: 600, ls: { 'cc-ultrawide.width': '0' } }).IG_WIDTH === 640);
 	ok('postload: non-ultrawide screen stays native',
 		postload({ innerWidth: 568, innerHeight: 320, ls: { 'cc-ultrawide-width': '50' } }).IG_WIDTH === 568);
+
+	// ---- desktop fullscreen vs windowed (IG_FULLSCREEN) -----------------------------------
+	// Real-world repro: NW.js fullscreen game on a 2752x1152 (21:9) monitor. At postload the window is
+	// still the small pre-fullscreen default (1134x628), so innerWidth must NOT decide the FOV when
+	// IG_FULLSCREEN is set — we read the MONITOR instead. even(320 * 2752/1152) = 764.
+	let fsWin = postload({
+		innerWidth: 1134, innerHeight: 628,
+		screen: { width: 2752, height: 1152 },
+		ls: { 'IG_FULLSCREEN': 'true' },
+	});
+	ok('postload: desktop fullscreen uses the monitor, not the tiny pre-fullscreen window',
+		fsWin.IG_WIDTH === 764 && fsWin.CC_ULTRAWIDE.viewport.w === 2752);
+
+	// Windowed (IG_FULLSCREEN false): keep using the window (Bug 2 — never squish ultrawide into a
+	// 16:9 window). The 1134x628 window is ~16:9, so the FOV stays ~native.
+	let winWin = postload({
+		innerWidth: 1134, innerHeight: 628,
+		screen: { width: 2752, height: 1152 },
+		ls: { 'IG_FULLSCREEN': 'false' },
+	});
+	ok('postload: desktop windowed uses the window (no monitor squish)',
+		winWin.CC_ULTRAWIDE.viewport.w === 1134 && winWin.IG_WIDTH < 600);
+
+	// No IG_FULLSCREEN key at all -> default to the window (back-compat).
+	ok('postload: absent IG_FULLSCREEN -> uses the window',
+		postload({ innerWidth: 1200, innerHeight: 600, screen: { width: 2752, height: 1152 } })
+			.CC_ULTRAWIDE.viewport.w === 1200);
+
+	// cc-ios: even with IG_FULLSCREEN set, the WKWebView must keep using innerWidth (screen.* is
+	// portrait/wrong on iOS). innerWidth is already the full landscape viewport there.
+	let iosWin = postload({
+		innerWidth: 1200, innerHeight: 600,
+		screen: { width: 600, height: 1200 },
+		ls: { 'IG_FULLSCREEN': 'true' },
+		ccios: true,
+	});
+	ok('postload: cc-ios ignores IG_FULLSCREEN and uses innerWidth',
+		iosWin.CC_ULTRAWIDE.viewport.w === 1200 && iosWin.IG_WIDTH === 640);
 })();
 
 // ---- prestart: preview API + pure geometry ------------------------------------------
