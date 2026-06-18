@@ -1,6 +1,6 @@
 {
 	"name": "cc-ultrawide",
-	"version": "1.0.12",
+	"version": "1.0.13",
 	"ccmodHumanName": "CrossCode Ultrawide",
 	"description": "Ultrawide field of view: see more of the world, not a stretched image. Width adjustable in Mod settings.",
 	"postload": "postload.js",
